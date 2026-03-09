@@ -158,7 +158,7 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
                 value={backupCode}
                 onChange={(e) => setBackupCode(e.target.value)}
                 placeholder="eyJuIjoi..."
-                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-sm h-32 resize-none"
+                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm h-32 resize-none"
               />
             </div>
             <button 
@@ -234,11 +234,11 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-50 flex items-center justify-center p-4 font-sans selection:bg-zinc-800">
+    <div className="min-h-screen bg-[#050505] text-zinc-50 flex items-center justify-center p-4 sm:p-6 font-sans overflow-x-hidden selection:bg-zinc-800">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-[#0a0a0a] p-8 rounded-2xl shadow-2xl border border-zinc-800/50"
+        className="max-w-md w-full bg-[#0a0a0a] p-6 sm:p-8 rounded-2xl shadow-2xl border border-zinc-800/50"
       >
         <h1 className="text-2xl font-light mb-2 tracking-tight">Memento Mori</h1>
         <div className="flex justify-between items-start mb-8">
@@ -287,7 +287,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your Name"
-              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
+              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
             />
           </div>
           <div>
@@ -302,7 +302,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
                   placeholder="YYYY"
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-sm text-center"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-2 sm:px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm text-center"
                 />
               </div>
               <div className="flex-1">
@@ -314,7 +314,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
                   value={month}
                   onChange={(e) => setMonth(e.target.value)}
                   placeholder="MM"
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-sm text-center"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-2 sm:px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm text-center"
                 />
               </div>
               <div className="flex-1">
@@ -326,7 +326,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
                   value={day}
                   onChange={(e) => setDay(e.target.value)}
                   placeholder="DD"
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-sm text-center"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-2 sm:px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm text-center"
                 />
               </div>
               <div className="relative flex items-center justify-center w-12 bg-[#050505] border border-zinc-800 rounded-lg overflow-hidden hover:bg-zinc-900 transition-colors">
@@ -356,7 +356,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
               max="150"
               value={expectedLifespan}
               onChange={(e) => setExpectedLifespan(e.target.value)}
-              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-sm"
+              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm"
             />
           </div>
           <div>
@@ -366,7 +366,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
               value={quote}
               onChange={(e) => setQuote(e.target.value)}
               placeholder="Memento Mori"
-              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
+              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
             />
           </div>
           <div>
@@ -375,7 +375,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="家族との時間、健康、挑戦し続けること..."
-              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm h-24 resize-none"
+              className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm h-24 resize-none"
             />
           </div>
           <div>
@@ -406,15 +406,15 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           <div className="pt-6 border-t border-zinc-900/50 space-y-4">
             <label className="block text-xs font-medium text-zinc-400 uppercase tracking-wider">年代別の目標・スローガン</label>
             {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].filter(d => d <= parseInt(expectedLifespan || '80')).map(decade => (
-              <div key={decade} className="flex items-center gap-3">
+              <div key={decade} className="flex items-center gap-2 sm:gap-3">
                 <span className="text-zinc-500 font-mono text-xs w-8">{decade}s</span>
-                <input
-                  type="text"
-                  value={decadeGoals[decade] || ''}
-                  onChange={(e) => setDecadeGoals({...decadeGoals, [decade]: e.target.value})}
-                  placeholder={`${decade}代の目標...`}
-                  className="flex-1 bg-[#050505] border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
-                />
+                  <input
+                    type="text"
+                    value={decadeGoals[decade] || ''}
+                    onChange={(e) => setDecadeGoals({...decadeGoals, [decade]: e.target.value})}
+                    placeholder={`${decade}代の目標...`}
+                    className="flex-1 bg-[#050505] border border-zinc-800 rounded-lg px-2 py-1 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm sm:text-base"
+                  />
               </div>
             ))}
           </div>
@@ -555,64 +555,64 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   return (
     <div 
       ref={shareRef}
-      className="min-h-screen flex flex-col items-center p-6 font-sans relative overflow-x-hidden selection:bg-zinc-800 transition-colors duration-500"
+      className="min-h-screen flex flex-col items-center p-4 sm:p-6 font-sans relative overflow-x-hidden selection:bg-zinc-800 transition-colors duration-500"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
     >
-      <div className="absolute top-6 left-6 md:top-8 md:left-8 z-10">
-        <div className="font-medium text-lg md:text-xl tracking-wide mb-1 opacity-90">
+      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 max-w-[60%] sm:max-w-none">
+        <div className="font-medium text-base md:text-xl tracking-wide mb-1 opacity-90 truncate">
           {userData.name}
         </div>
-        <div className="text-[10px] md:text-xs font-mono tracking-widest uppercase opacity-60">
+        <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase opacity-60">
           BORN: <span className="opacity-80">{userData.birthDate.replace(/-/g, '.')}</span>
         </div>
-        <div className="text-[10px] md:text-xs font-mono tracking-widest uppercase mt-0.5 opacity-60">
+        <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase mt-0.5 opacity-60">
           LIFESPAN: <span className="opacity-80">{userData.expectedLifespan} YEARS</span>
         </div>
       </div>
 
       {!isSharing && (
-        <div className="absolute top-6 right-6 md:top-8 md:right-8 flex gap-2 z-10">
+        <div className="absolute top-4 right-4 md:top-8 md:right-8 flex gap-1 md:gap-2 z-10 bg-[#050505]/50 backdrop-blur-sm rounded-full sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0">
           <button 
             onClick={handleShare}
             disabled={isSharing}
-            className="p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="シェア"
           >
-            <Share2 size={20} />
+            <Share2 size={18} className="md:w-5 md:h-5" />
           </button>
           <button 
             onClick={onEdit}
-            className="p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="設定"
           >
-            <Settings size={20} />
+            <Settings size={18} className="md:w-5 md:h-5" />
           </button>
           <button 
             onClick={onLogout}
-            className="p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="ログアウト"
           >
-            <LogOut size={20} />
+            <LogOut size={18} className="md:w-5 md:h-5" />
           </button>
         </div>
       )}
 
-      <div className="flex-1 w-full flex flex-col items-center justify-center mt-24 md:mt-0">
+      <div className="flex-1 w-full flex flex-col items-center justify-center mt-32 md:mt-0">
         <motion.div 
           initial={{ opacity: 0, filter: 'blur(10px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
           transition={{ duration: 1, ease: "easeOut" }}
           className="w-full max-w-5xl flex flex-col items-center"
         >
-        <div className="text-center mb-20 w-full">
+        <div className="text-center mb-16 md:mb-20 w-full px-2">
           <InlineEdit
             value={userData.quote}
             onSave={(val) => onUpdateUserData({ quote: val })}
-            className="text-base md:text-xl tracking-[0.2em] font-light mb-12 max-w-2xl mx-auto leading-relaxed px-4 opacity-90 block"
+            className="text-sm md:text-xl tracking-[0.15em] md:tracking-[0.2em] font-light mb-8 md:mb-12 max-w-[90%] md:max-w-2xl mx-auto leading-relaxed opacity-90 block"
             placeholder="Double tap to set your quote..."
           />
           
-          <div className="flex flex-wrap justify-center items-baseline gap-x-4 md:gap-x-8 gap-y-8">
+          <div className="flex flex-wrap justify-center items-baseline gap-x-3 sm:gap-x-6 md:gap-x-8 gap-y-6 md:gap-y-8">
             <TimeBlock value={timeLeft.years} label="YEARS" />
             <TimeBlock value={pad(timeLeft.months)} label="MONTHS" />
             <TimeBlock value={pad(timeLeft.days)} label="DAYS" />
@@ -798,11 +798,11 @@ function DecadesList({ birthDate, expectedLifespan, decadeGoals, textColor, onUp
 
 function TimeBlock({ value, label }: { value: string | number, label: string }) {
   return (
-    <div className="flex flex-col items-center">
-      <span className="font-mono font-light tracking-tighter tabular-nums text-5xl md:text-7xl">
+    <div className="flex flex-col items-center min-w-[3rem] sm:min-w-0">
+      <span className="font-mono font-light tracking-tighter tabular-nums text-4xl sm:text-5xl md:text-7xl">
         {value}
       </span>
-      <span className="text-[9px] md:text-[11px] tracking-[0.3em] mt-2 md:mt-3 opacity-60">
+      <span className="text-[8px] sm:text-[9px] md:text-[11px] tracking-[0.2em] md:tracking-[0.3em] mt-1 md:mt-3 opacity-60">
         {label}
       </span>
     </div>
