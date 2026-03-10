@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2 } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, Sparkles } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { ReflectModal } from './components/ReflectModal';
 
-interface UserData {
+export interface UserData {
   name: string;
   birthDate: string;
   expectedLifespan: number;
@@ -138,7 +139,7 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-50 flex items-center justify-center p-4 font-sans selection:bg-zinc-800">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-[#0a0a0a] p-8 rounded-2xl shadow-2xl border border-zinc-800/50"
@@ -147,13 +148,13 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
         <p className="text-zinc-500 mb-8 text-sm">
           {isRestore ? '復元キーを入力してデータを復元します。' : 'あなたの人生の残り時間を計算します。'}
         </p>
-        
+
         {isRestore ? (
           <form onSubmit={handleRestore} className="space-y-6">
             {error && <div className="text-red-500 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">復元キー</label>
-              <textarea 
+              <textarea
                 required
                 value={backupCode}
                 onChange={(e) => setBackupCode(e.target.value)}
@@ -161,7 +162,7 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
                 className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm h-32 resize-none"
               />
             </div>
-            <button 
+            <button
               type="submit"
               className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4"
             >
@@ -170,13 +171,13 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
           </form>
         ) : (
           <div className="space-y-4">
-            <button 
+            <button
               onClick={onStart}
               className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors"
             >
               新しく始める
             </button>
-            <button 
+            <button
               onClick={() => setIsRestore(true)}
               className="w-full bg-[#050505] text-zinc-300 font-medium rounded-lg px-4 py-3 border border-zinc-800 hover:bg-zinc-900 transition-colors"
             >
@@ -187,7 +188,7 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
 
         {isRestore && (
           <div className="mt-6 text-center">
-            <button 
+            <button
               onClick={() => { setIsRestore(false); setError(''); }}
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
@@ -235,7 +236,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-50 flex items-center justify-center p-4 sm:p-6 font-sans overflow-x-hidden selection:bg-zinc-800">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full bg-[#0a0a0a] p-6 sm:p-8 rounded-2xl shadow-2xl border border-zinc-800/50"
@@ -254,20 +255,20 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
         </div>
 
         {showBackup && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             className="mb-8 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg"
           >
             <p className="text-xs text-zinc-400 mb-2">この復元キーを保存しておくと、別の端末やブラウザでもデータを引き継げます。</p>
             <div className="flex gap-2">
-              <textarea 
-                readOnly 
-                value={generateBackupCode()} 
+              <textarea
+                readOnly
+                value={generateBackupCode()}
                 onClick={(e) => (e.target as HTMLTextAreaElement).select()}
                 className="flex-1 bg-[#050505] border border-zinc-800 rounded px-3 py-2 text-zinc-300 font-mono text-xs focus:outline-none h-20 resize-none break-all"
               />
-              <button 
+              <button
                 type="button"
                 onClick={handleCopyBackup}
                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-2 rounded transition-colors flex items-center justify-center"
@@ -277,12 +278,12 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
             </div>
           </motion.div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">名前</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -294,8 +295,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">生年月日</label>
             <div className="flex gap-3">
               <div className="flex-[2]">
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   required
                   min="1900"
                   max={new Date().getFullYear()}
@@ -306,8 +307,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
                 />
               </div>
               <div className="flex-1">
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   required
                   min="1"
                   max="12"
@@ -318,8 +319,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
                 />
               </div>
               <div className="flex-1">
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   required
                   min="1"
                   max="31"
@@ -331,8 +332,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
               </div>
               <div className="relative flex items-center justify-center w-12 bg-[#050505] border border-zinc-800 rounded-lg overflow-hidden hover:bg-zinc-900 transition-colors">
                 <Calendar size={18} className="text-zinc-400 absolute pointer-events-none" />
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={year.length === 4 && month && day ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : ''}
                   onChange={(e) => {
                     if (e.target.value) {
@@ -349,8 +350,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">想定寿命（年齢）</label>
-            <input 
-              type="number" 
+            <input
+              type="number"
               required
               min="1"
               max="150"
@@ -361,8 +362,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">座右の銘・目標</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={quote}
               onChange={(e) => setQuote(e.target.value)}
               placeholder="Memento Mori"
@@ -371,7 +372,7 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           </div>
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">人生で大切なこと（メモ）</label>
-            <textarea 
+            <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="家族との時間、健康、挑戦し続けること..."
@@ -381,8 +382,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">背景色</label>
             <div className="flex items-center gap-4 bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3">
-              <input 
-                type="color" 
+              <input
+                type="color"
                 value={bgColor}
                 onChange={(e) => setBgColor(e.target.value)}
                 className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
@@ -393,8 +394,8 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">テキスト色</label>
             <div className="flex items-center gap-4 bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3">
-              <input 
-                type="color" 
+              <input
+                type="color"
                 value={textColor}
                 onChange={(e) => setTextColor(e.target.value)}
                 className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
@@ -408,18 +409,18 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
             {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].filter(d => d <= parseInt(expectedLifespan || '80')).map(decade => (
               <div key={decade} className="flex items-center gap-2 sm:gap-3">
                 <span className="text-zinc-500 font-mono text-xs w-8">{decade}s</span>
-                  <input
-                    type="text"
-                    value={decadeGoals[decade] || ''}
-                    onChange={(e) => setDecadeGoals({...decadeGoals, [decade]: e.target.value})}
-                    placeholder={`${decade}代の目標...`}
-                    className="flex-1 bg-[#050505] border border-zinc-800 rounded-lg px-2 py-1 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm sm:text-base"
-                  />
+                <input
+                  type="text"
+                  value={decadeGoals[decade] || ''}
+                  onChange={(e) => setDecadeGoals({ ...decadeGoals, [decade]: e.target.value })}
+                  placeholder={`${decade}代の目標...`}
+                  className="flex-1 bg-[#050505] border border-zinc-800 rounded-lg px-2 py-1 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm sm:text-base"
+                />
               </div>
             ))}
           </div>
 
-          <button 
+          <button
             type="submit"
             className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4"
           >
@@ -436,6 +437,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [progress, setProgress] = useState({ elapsed: 0, remaining: 100 });
   const [deathDate, setDeathDate] = useState<string>('');
   const [isSharing, setIsSharing] = useState(false);
+  const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
@@ -444,18 +446,18 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
       setIsSharing(true);
       // Wait for state to update so buttons are hidden
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      const dataUrl = await toPng(shareRef.current, { 
-        quality: 1.0, 
+
+      const dataUrl = await toPng(shareRef.current, {
+        quality: 1.0,
         pixelRatio: 2,
         style: {
           backgroundColor: userData.bgColor || '#050505',
         }
       });
-      
+
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], 'memento-mori.png', { type: 'image/png' });
-      
+
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           title: 'Memento Mori',
@@ -495,7 +497,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
     const update = () => {
       const now = new Date();
-      
+
       if (now >= end) {
         setTimeLeft({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
         setProgress({ elapsed: 100, remaining: 0 });
@@ -504,14 +506,14 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       const elapsedMs = now.getTime() - birth.getTime();
       const elapsedPercent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
-      
+
       setProgress({
         elapsed: elapsedPercent,
         remaining: 100 - elapsedPercent
       });
 
       let tempDate = new Date(now);
-      
+
       let years = end.getFullYear() - tempDate.getFullYear();
       tempDate.setFullYear(tempDate.getFullYear() + years);
       if (tempDate > end) {
@@ -544,7 +546,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
       const milliseconds = diffMs - seconds * 1000;
 
       setTimeLeft({ years, months, days, hours, minutes, seconds, milliseconds });
-      
+
       animationFrameId = requestAnimationFrame(update);
     };
 
@@ -553,7 +555,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   }, [userData]);
 
   return (
-    <div 
+    <div
       ref={shareRef}
       className="min-h-screen flex flex-col items-center p-4 sm:p-6 font-sans relative overflow-x-hidden selection:bg-zinc-800 transition-colors duration-500"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
@@ -572,7 +574,14 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       {!isSharing && (
         <div className="absolute top-4 right-4 md:top-8 md:right-8 flex gap-1 md:gap-2 z-10 bg-[#050505]/50 backdrop-blur-sm rounded-full sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0">
-          <button 
+          <button
+            onClick={() => setIsReflectModalOpen(true)}
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            title="カレンダー振り返り"
+          >
+            <Calendar size={18} className="md:w-5 md:h-5" />
+          </button>
+          <button
             onClick={handleShare}
             disabled={isSharing}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
@@ -580,14 +589,14 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           >
             <Share2 size={18} className="md:w-5 md:h-5" />
           </button>
-          <button 
+          <button
             onClick={onEdit}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="設定"
           >
             <Settings size={18} className="md:w-5 md:h-5" />
           </button>
-          <button 
+          <button
             onClick={onLogout}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="ログアウト"
@@ -598,71 +607,71 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
       )}
 
       <div className="flex-1 w-full flex flex-col items-center justify-center mt-32 md:mt-0">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, filter: 'blur(10px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
           transition={{ duration: 1, ease: "easeOut" }}
           className="w-full max-w-5xl flex flex-col items-center"
         >
-        <div className="text-center mb-16 md:mb-20 w-full px-2">
-          <InlineEdit
-            value={userData.quote}
-            onSave={(val) => onUpdateUserData({ quote: val })}
-            className="text-sm md:text-xl tracking-[0.15em] md:tracking-[0.2em] font-light mb-8 md:mb-12 max-w-[90%] md:max-w-2xl mx-auto leading-relaxed opacity-90 block"
-            placeholder="Double tap to set your quote..."
-          />
-          
-          <div className="flex flex-wrap justify-center items-baseline gap-x-3 sm:gap-x-6 md:gap-x-8 gap-y-6 md:gap-y-8">
-            <TimeBlock value={timeLeft.years} label="YEARS" />
-            <TimeBlock value={pad(timeLeft.months)} label="MONTHS" />
-            <TimeBlock value={pad(timeLeft.days)} label="DAYS" />
-            <TimeBlock value={pad(timeLeft.hours)} label="HOURS" />
-            <TimeBlock value={pad(timeLeft.minutes)} label="MINS" />
-            <TimeBlock value={pad(timeLeft.seconds)} label="SECS" />
-            <TimeBlock value={pad(Math.floor(timeLeft.milliseconds / 10))} label="MS" />
-          </div>
-        </div>
+          <div className="text-center mb-16 md:mb-20 w-full px-2">
+            <InlineEdit
+              value={userData.quote}
+              onSave={(val) => onUpdateUserData({ quote: val })}
+              className="text-sm md:text-xl tracking-[0.15em] md:tracking-[0.2em] font-light mb-8 md:mb-12 max-w-[90%] md:max-w-2xl mx-auto leading-relaxed opacity-90 block"
+              placeholder="Double tap to set your quote..."
+            />
 
-        <div className="w-full max-w-3xl space-y-6">
-          <div className="flex justify-between items-end">
-            <div className="text-[10px] md:text-xs font-mono tracking-widest uppercase flex flex-col gap-1 opacity-60">
-              <span>Elapsed {progress.elapsed.toFixed(6)}%</span>
-              <span className="opacity-90">Remaining {progress.remaining.toFixed(6)}%</span>
+            <div className="flex flex-wrap justify-center items-baseline gap-x-3 sm:gap-x-6 md:gap-x-8 gap-y-6 md:gap-y-8">
+              <TimeBlock value={timeLeft.years} label="YEARS" />
+              <TimeBlock value={pad(timeLeft.months)} label="MONTHS" />
+              <TimeBlock value={pad(timeLeft.days)} label="DAYS" />
+              <TimeBlock value={pad(timeLeft.hours)} label="HOURS" />
+              <TimeBlock value={pad(timeLeft.minutes)} label="MINS" />
+              <TimeBlock value={pad(timeLeft.seconds)} label="SECS" />
+              <TimeBlock value={pad(Math.floor(timeLeft.milliseconds / 10))} label="MS" />
             </div>
-            <div className="text-right">
-              <span className="text-[9px] md:text-[10px] tracking-[0.2em] uppercase block mb-1 opacity-60">Expected End Date</span>
-              <span className="font-mono text-sm md:text-base tracking-widest opacity-80">{deathDate}</span>
+          </div>
+
+          <div className="w-full max-w-3xl space-y-6">
+            <div className="flex justify-between items-end">
+              <div className="text-[10px] md:text-xs font-mono tracking-widest uppercase flex flex-col gap-1 opacity-60">
+                <span>Elapsed {progress.elapsed.toFixed(6)}%</span>
+                <span className="opacity-90">Remaining {progress.remaining.toFixed(6)}%</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] md:text-[10px] tracking-[0.2em] uppercase block mb-1 opacity-60">Expected End Date</span>
+                <span className="font-mono text-sm md:text-base tracking-widest opacity-80">{deathDate}</span>
+              </div>
+            </div>
+
+            <div className="relative w-full h-8 mb-1">
+              <motion.div
+                className="absolute bottom-0 opacity-90"
+                style={{ left: `${progress.elapsed}%`, x: '-50%' }}
+              >
+                <WalkingIcon />
+              </motion.div>
+            </div>
+            <div className="h-[2px] w-full flex rounded-full">
+              <div
+                className="h-full"
+                style={{ width: `${progress.elapsed}%`, backgroundColor: 'currentColor', opacity: 0.15 }}
+              />
+              <div
+                className="h-full relative"
+                style={{
+                  width: `${progress.remaining}%`,
+                  backgroundColor: 'currentColor',
+                  opacity: 0.9,
+                  boxShadow: '0 0 10px currentColor'
+                }}
+              />
             </div>
           </div>
-          
-          <div className="relative w-full h-8 mb-1">
-            <motion.div 
-              className="absolute bottom-0 opacity-90"
-              style={{ left: `${progress.elapsed}%`, x: '-50%' }}
-            >
-              <WalkingIcon />
-            </motion.div>
-          </div>
-          <div className="h-[2px] w-full flex rounded-full">
-            <div 
-              className="h-full"
-              style={{ width: `${progress.elapsed}%`, backgroundColor: 'currentColor', opacity: 0.15 }}
-            />
-            <div 
-              className="h-full relative"
-              style={{ 
-                width: `${progress.remaining}%`,
-                backgroundColor: 'currentColor',
-                opacity: 0.9,
-                boxShadow: '0 0 10px currentColor'
-              }}
-            />
-          </div>
-        </div>
         </motion.div>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 1 }}
@@ -681,16 +690,22 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
         </div>
       </motion.div>
 
-      <DecadesList 
-        birthDate={userData.birthDate} 
-        expectedLifespan={userData.expectedLifespan} 
-        decadeGoals={userData.decadeGoals} 
-        textColor={userData.textColor} 
+      <DecadesList
+        birthDate={userData.birthDate}
+        expectedLifespan={userData.expectedLifespan}
+        decadeGoals={userData.decadeGoals}
+        textColor={userData.textColor}
         onUpdateGoal={(decade, goal) => {
           onUpdateUserData({
             decadeGoals: { ...(userData.decadeGoals || {}), [decade]: goal }
           });
         }}
+      />
+
+      <ReflectModal
+        isOpen={isReflectModalOpen}
+        onClose={() => setIsReflectModalOpen(false)}
+        userData={userData}
       />
     </div>
   );
@@ -698,7 +713,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
 function DecadesList({ birthDate, expectedLifespan, decadeGoals, textColor, onUpdateGoal }: { birthDate: string, expectedLifespan: number, decadeGoals?: Record<string, string>, textColor?: string, onUpdateGoal: (decade: number, goal: string) => void }) {
   const [now, setNow] = useState(new Date());
-  
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -726,7 +741,7 @@ function DecadesList({ birthDate, expectedLifespan, decadeGoals, textColor, onUp
     }
     let diffMs = end.getTime() - tempDate.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
+
     const parts = [];
     if (years > 0) parts.push(`${years}y`);
     if (months > 0) parts.push(`${months}m`);
@@ -735,7 +750,7 @@ function DecadesList({ birthDate, expectedLifespan, decadeGoals, textColor, onUp
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.7, duration: 1 }}
@@ -749,10 +764,10 @@ function DecadesList({ birthDate, expectedLifespan, decadeGoals, textColor, onUp
           start.setFullYear(start.getFullYear() + decade);
           const end = new Date(birth);
           end.setFullYear(end.getFullYear() + decade + 10);
-          
+
           const isPast = now >= end;
           const isCurrent = now >= start && now < end;
-          
+
           let timeText = '';
           let label = '';
           if (isPast) {
@@ -809,15 +824,15 @@ function TimeBlock({ value, label }: { value: string | number, label: string }) 
   );
 }
 
-function InlineEdit({ 
-  value, 
-  onSave, 
-  multiline = false, 
+function InlineEdit({
+  value,
+  onSave,
+  multiline = false,
   className = "",
   placeholder = "Double tap to edit..."
-}: { 
-  value: string, 
-  onSave: (val: string) => void, 
+}: {
+  value: string,
+  onSave: (val: string) => void,
   multiline?: boolean,
   className?: string,
   placeholder?: string
@@ -881,7 +896,7 @@ function InlineEdit({
   }
 
   return (
-    <div 
+    <div
       onDoubleClick={() => {
         setTempValue(value);
         setIsEditing(true);
@@ -907,7 +922,7 @@ function WalkingIcon() {
         .frame-3 { animation: walk-frame 1s infinite; animation-delay: 0.5s; }
         .frame-4 { animation: walk-frame 1s infinite; animation-delay: 0.75s; }
       `}</style>
-      
+
       {/* Frame 1: Right foot forward */}
       <svg className="absolute inset-0 frame-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="4" r="2" />
@@ -917,7 +932,7 @@ function WalkingIcon() {
         <path d="M12 12l3 4l1 4" /> {/* Right leg forward */}
         <path d="M12 12l-3 4l-1 4" /> {/* Left leg back */}
       </svg>
-      
+
       {/* Frame 2: Midpoint (body slightly up) */}
       <svg className="absolute inset-0 frame-2 opacity-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="3" r="2" />
@@ -927,7 +942,7 @@ function WalkingIcon() {
         <path d="M12 11l1 5l-1 4" /> {/* Right leg bent */}
         <path d="M12 11l-1 5l1 4" /> {/* Left leg straight */}
       </svg>
-      
+
       {/* Frame 3: Left foot forward */}
       <svg className="absolute inset-0 frame-3 opacity-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="4" r="2" />
@@ -937,7 +952,7 @@ function WalkingIcon() {
         <path d="M12 12l-3 4l-1 4" /> {/* Right leg back */}
         <path d="M12 12l3 4l1 4" /> {/* Left leg forward */}
       </svg>
-      
+
       {/* Frame 4: Midpoint (body slightly up) */}
       <svg className="absolute inset-0 frame-4 opacity-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="3" r="2" />
