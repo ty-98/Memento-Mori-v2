@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, Sparkles } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { ReflectModal } from './components/ReflectModal';
 
