@@ -5,6 +5,8 @@ import { toPng } from 'html-to-image';
 import { ReflectModal } from './components/ReflectModal';
 
 export interface UserData {
+  id?: string;
+  username?: string;
   name: string;
   birthDate: string;
   expectedLifespan: number;
@@ -54,6 +56,8 @@ const sanitizeUserData = (data: any): UserData => {
   };
 
   return {
+    id: data.id,
+    username: data.username,
     name: sanitizeString(data.name || data.n, 100, 'Anonymous'),
     birthDate: sanitizeString(data.birthDate || data.b, 20, '1990-01-01'),
     expectedLifespan: typeof (data.expectedLifespan || data.l) === 'number' ? (data.expectedLifespan || data.l) : 80,
@@ -83,11 +87,40 @@ export default function App() {
     setIsAuthLoading(false);
   }, []);
 
-  const handleSave = (data: UserData) => {
-    const sanitized = sanitizeUserData(data);
-    setUserData(sanitized);
-    setIsEditing(false);
-    localStorage.setItem('life_countdown_data', JSON.stringify(sanitized));
+  const handleSave = async (data: UserData, credentials?: { username?: string; password?: string }) => {
+    if (credentials?.username && credentials?.password) {
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, username: credentials.username, password: credentials.password })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Registration failed');
+        }
+        const savedData = await res.json();
+        const sanitized = sanitizeUserData(savedData);
+        setUserData(sanitized);
+        setIsEditing(false);
+        localStorage.setItem('life_countdown_data', JSON.stringify(sanitized));
+      } catch (e: any) {
+        alert(e.message);
+      }
+    } else {
+      const sanitized = sanitizeUserData(data);
+      setUserData(sanitized);
+      setIsEditing(false);
+      localStorage.setItem('life_countdown_data', JSON.stringify(sanitized));
+      
+      if (sanitized.id) {
+        fetch(`/api/user/${sanitized.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sanitized)
+        }).catch(err => console.error('Failed to sync update', err));
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -99,7 +132,7 @@ export default function App() {
   if (isAuthLoading) return <div className="min-h-screen bg-[#050505]" />;
 
   if (!userData && !isEditing) {
-    return <WelcomeScreen onStart={() => setIsEditing(true)} onRestore={handleSave} />;
+    return <WelcomeScreen onStart={() => setIsEditing(true)} onLogin={handleSave} />;
   }
 
   if (isEditing) {
@@ -111,29 +144,46 @@ export default function App() {
       const updated = { ...userData, ...newData };
       setUserData(updated);
       localStorage.setItem('life_countdown_data', JSON.stringify(updated));
+      
+      if (updated.id) {
+        fetch(`/api/user/${updated.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        }).catch(err => console.error('Failed to sync update', err));
+      }
     }
   };
 
   return <CountdownView userData={userData!} onEdit={() => setIsEditing(true)} onLogout={handleLogout} onUpdateUserData={handleUpdateUserData} />;
 }
 
-function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore: (data: UserData) => void }) {
-  const [isRestore, setIsRestore] = useState(false);
-  const [backupCode, setBackupCode] = useState('');
+function WelcomeScreen({ onStart, onLogin }: { onStart: () => void, onLogin: (data: UserData) => void }) {
+  const [isLogin, setIsLogin] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleRestore = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
     try {
-      const payload = JSON.parse(decodeURIComponent(atob(backupCode)));
-      if (payload.b && payload.l) {
-        onRestore(sanitizeUserData(payload));
-      } else {
-        throw new Error('Invalid backup code format');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (!res.ok) {
+        throw new Error('ログインに失敗しました。ユーザーIDとパスワードを確認してください。');
       }
-    } catch (err) {
-      setError('無効な復元キーです。正しいキーを入力してください。');
+      const data = await res.json();
+      onLogin(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -146,27 +196,40 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
       >
         <h1 className="text-2xl font-light mb-2 tracking-tight">Memento Mori</h1>
         <p className="text-zinc-500 mb-8 text-sm">
-          {isRestore ? '復元キーを入力してデータを復元します。' : 'あなたの人生の残り時間を計算します。'}
+          {isLogin ? 'ユーザーIDとパスワードを入力してログインします。' : 'あなたの人生の残り時間を計算します。'}
         </p>
 
-        {isRestore ? (
-          <form onSubmit={handleRestore} className="space-y-6">
+        {isLogin ? (
+          <form onSubmit={handleLoginSubmit} className="space-y-6">
             {error && <div className="text-red-500 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">復元キー</label>
-              <textarea
+              <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">ユーザーID</label>
+              <input
+                type="text"
                 required
-                value={backupCode}
-                onChange={(e) => setBackupCode(e.target.value)}
-                placeholder="eyJuIjoi..."
-                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-mono text-base md:text-sm h-32 resize-none"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="User ID"
+                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">パスワード</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4"
+              disabled={isLoading}
+              className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4 disabled:opacity-50"
             >
-              復元する
+              ログイン
             </button>
           </form>
         ) : (
@@ -178,18 +241,19 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
               新しく始める
             </button>
             <button
-              onClick={() => setIsRestore(true)}
+              onClick={() => setIsLogin(true)}
               className="w-full bg-[#050505] text-zinc-300 font-medium rounded-lg px-4 py-3 border border-zinc-800 hover:bg-zinc-900 transition-colors"
             >
-              復元キーからデータを引き継ぐ
+              ログインしてデータを引き継ぐ
             </button>
           </div>
         )}
 
-        {isRestore && (
+        {isLogin && (
           <div className="mt-6 text-center">
             <button
-              onClick={() => { setIsRestore(false); setError(''); }}
+              onClick={() => { setIsLogin(false); setError(''); }}
+              type="button"
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               戻る
@@ -201,7 +265,9 @@ function WelcomeScreen({ onStart, onRestore }: { onStart: () => void, onRestore:
   );
 }
 
-function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | null, onSave: (data: UserData) => void, onLogout: () => void }) {
+function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | null, onSave: (data: UserData, credentials?: { username?: string; password?: string }) => void, onLogout: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState(initialData?.name || '');
   const [quote, setQuote] = useState(initialData?.quote || 'Memento Mori');
   const [notes, setNotes] = useState(initialData?.notes || '');
@@ -213,25 +279,13 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
   const [month, setMonth] = useState((defaultDate.getMonth() + 1).toString());
   const [day, setDay] = useState(defaultDate.getDate().toString());
   const [expectedLifespan, setExpectedLifespan] = useState(initialData?.expectedLifespan?.toString() || '80');
-  const [showBackup, setShowBackup] = useState(false);
-  const [copied, setCopied] = useState(false);
+
+  const isNew = !initialData;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    onSave({ name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals });
-  };
-
-  const generateBackupCode = () => {
-    const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    const payload = { n: name, b: birthDate, l: parseInt(expectedLifespan, 10), q: quote, m: notes, bg: bgColor, tc: textColor, dg: decadeGoals };
-    return btoa(encodeURIComponent(JSON.stringify(payload)));
-  };
-
-  const handleCopyBackup = () => {
-    navigator.clipboard.writeText(generateBackupCode());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals }, isNew ? { username, password } : undefined);
   };
 
   return (
@@ -245,41 +299,39 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
         <div className="flex justify-between items-start mb-8">
           <p className="text-zinc-500 text-sm">あなたの人生の残り時間を計算します。</p>
           <div className="flex gap-2">
-            <button onClick={() => setShowBackup(!showBackup)} className="text-zinc-600 hover:text-zinc-300 transition-colors" title="復元キーを発行">
-              <KeyRound size={16} />
-            </button>
             <button onClick={onLogout} className="text-zinc-600 hover:text-zinc-300 transition-colors" title="リセット">
               <LogOut size={16} />
             </button>
           </div>
         </div>
 
-        {showBackup && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="mb-8 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg"
-          >
-            <p className="text-xs text-zinc-400 mb-2">この復元キーを保存しておくと、別の端末やブラウザでもデータを引き継げます。</p>
-            <div className="flex gap-2">
-              <textarea
-                readOnly
-                value={generateBackupCode()}
-                onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                className="flex-1 bg-[#050505] border border-zinc-800 rounded px-3 py-2 text-zinc-300 font-mono text-xs focus:outline-none h-20 resize-none break-all"
-              />
-              <button
-                type="button"
-                onClick={handleCopyBackup}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-2 rounded transition-colors flex items-center justify-center"
-              >
-                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-6">
+          {isNew && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">ユーザーID</label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ログイン用ID (英数字)"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">パスワード</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="パスワード"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-base md:text-sm"
+                />
+              </div>
+            </>
+          )}
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">名前</label>
             <input
@@ -574,13 +626,14 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       {!isSharing && (
         <div className="absolute top-4 right-4 md:top-8 md:right-8 flex gap-1 md:gap-2 z-10 bg-[#050505]/50 backdrop-blur-sm rounded-full sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0">
-          <button
+          {/* まだコスト等の懸念があるため、一旦非公開にする（カレンダーボタンを隠す） */}
+          {/* <button
             onClick={() => setIsReflectModalOpen(true)}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="カレンダー振り返り"
           >
             <Calendar size={18} className="md:w-5 md:h-5" />
-          </button>
+          </button> */}
           <button
             onClick={handleShare}
             disabled={isSharing}

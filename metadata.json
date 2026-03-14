@@ -1,0 +1,5 @@
+{
+  "name": "Memento Mori",
+  "description": "A countdown app that visualizes the remaining time of your life to increase motivation and awareness of time's finite nature.",
+  "requestFramePermissions": []
+}
