@@ -590,9 +590,9 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
 
           <button
             type="submit"
-            className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4"
+            className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors mt-4 disabled:opacity-50"
           >
-            刻む
+            {isNew ? '保存してはじめる' : '保存する'}
           </button>
         </form>
 
