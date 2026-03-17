@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2 } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { ReflectModal } from './components/ReflectModal';
 
@@ -15,6 +15,7 @@ export interface UserData {
   bgColor?: string;
   textColor?: string;
   decadeGoals?: Record<string, string>;
+  avatar?: string | null;
 }
 
 interface TimeLeft {
@@ -65,7 +66,8 @@ const sanitizeUserData = (data: any): UserData => {
     notes: sanitizeString(data.notes || data.m, 10000, ''),
     bgColor: sanitizeColor(data.bgColor || data.bg, '#050505'),
     textColor: sanitizeColor(data.textColor || data.tc, '#fafafa'),
-    decadeGoals: sanitizeDecadeGoals(data.decadeGoals || data.dg)
+    decadeGoals: sanitizeDecadeGoals(data.decadeGoals || data.dg),
+    avatar: typeof data.avatar === 'string' ? data.avatar : null
   };
 };
 
@@ -135,8 +137,46 @@ export default function App() {
     return <WelcomeScreen onStart={() => setIsEditing(true)} onLogin={handleSave} />;
   }
 
+  const handleDeleteAccount = async () => {
+    if (userData?.id) {
+      if (!window.confirm('本当にアカウントを削除しますか？この操作は取り消せません。')) return;
+      try {
+        await fetch(`/api/user/${userData.id}`, { method: 'DELETE' });
+        handleLogout();
+      } catch (err) {
+        alert('削除に失敗しました。');
+      }
+    }
+  };
+
+  const handleUpdateCredentials = async (credentials: any) => {
+    if (userData?.id) {
+      try {
+        const res = await fetch(`/api/auth/${userData.id}/credentials`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(credentials)
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Update failed');
+        }
+        const data = await res.json();
+        // Update local username if changed
+        if (data.username && userData.username !== data.username) {
+          const updated = { ...userData, username: data.username };
+          setUserData(updated);
+          localStorage.setItem('life_countdown_data', JSON.stringify(updated));
+        }
+        alert('認証情報を更新しました。');
+      } catch (e: any) {
+        alert(e.message);
+      }
+    }
+  };
+
   if (isEditing) {
-    return <SetupForm initialData={userData} onSave={handleSave} onLogout={handleLogout} />;
+    return <SetupForm initialData={userData} onSave={handleSave} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} onUpdateCredentials={handleUpdateCredentials} onCancel={() => setIsEditing(false)} />;
   }
 
   const handleUpdateUserData = (newData: Partial<UserData>) => {
@@ -265,7 +305,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void, onLogin: (da
   );
 }
 
-function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | null, onSave: (data: UserData, credentials?: { username?: string; password?: string }) => void, onLogout: () => void }) {
+function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCredentials, onCancel }: { initialData: UserData | null, onSave: (data: UserData, credentials?: { username?: string; password?: string }) => void, onLogout: () => void, onDeleteAccount?: () => void, onUpdateCredentials?: (creds: any) => void, onCancel?: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState(initialData?.name || '');
@@ -274,18 +314,71 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
   const [bgColor, setBgColor] = useState(initialData?.bgColor || '#050505');
   const [textColor, setTextColor] = useState(initialData?.textColor || '#fafafa');
   const [decadeGoals, setDecadeGoals] = useState<Record<string, string>>(initialData?.decadeGoals || {});
+  const [avatar, setAvatar] = useState<string | null>(initialData?.avatar || null);
   const defaultDate = initialData?.birthDate ? new Date(initialData.birthDate) : new Date('1990-01-01');
   const [year, setYear] = useState(defaultDate.getFullYear().toString());
   const [month, setMonth] = useState((defaultDate.getMonth() + 1).toString());
   const [day, setDay] = useState(defaultDate.getDate().toString());
   const [expectedLifespan, setExpectedLifespan] = useState(initialData?.expectedLifespan?.toString() || '80');
 
+  const [showSecurity, setShowSecurity] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
   const isNew = !initialData;
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('画像サイズは5MB以下にしてください。');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 256;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          setAvatar(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals }, isNew ? { username, password } : undefined);
+    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals, avatar }, isNew ? { username, password } : undefined);
+  };
+
+  const handleUpdateCreds = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateCredentials) {
+      onUpdateCredentials({ currentPassword, newUsername, newPassword });
+    }
   };
 
   return (
@@ -299,13 +392,36 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
         <div className="flex justify-between items-start mb-8">
           <p className="text-zinc-500 text-sm">あなたの人生の残り時間を計算します。</p>
           <div className="flex gap-2">
-            <button onClick={onLogout} className="text-zinc-600 hover:text-zinc-300 transition-colors" title="リセット">
+            {!isNew && onCancel && (
+              <button onClick={onCancel} type="button" className="text-zinc-600 hover:text-zinc-300 transition-colors mr-2" title="キャンセル">
+                <X size={16} />
+              </button>
+            )}
+            <button onClick={onLogout} type="button" className="text-zinc-600 hover:text-zinc-300 transition-colors" title="リセット">
               <LogOut size={16} />
             </button>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex flex-col items-center mb-6">
+            <label className="relative cursor-pointer group">
+              <div className="w-24 h-24 rounded-full bg-zinc-800 border-2 border-zinc-700 flex items-center justify-center overflow-hidden hover:border-zinc-500 transition-colors">
+                {avatar ? (
+                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-zinc-500 text-xs text-center px-2 group-hover:text-zinc-400">アイコン設定</span>
+                )}
+              </div>
+              <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+            </label>
+            {avatar && (
+              <button type="button" onClick={() => setAvatar(null)} className="text-xs text-zinc-500 mt-2 hover:text-zinc-300">
+                削除
+              </button>
+            )}
+          </div>
+
           {isNew && (
             <>
               <div>
@@ -479,6 +595,70 @@ function SetupForm({ initialData, onSave, onLogout }: { initialData: UserData | 
             刻む
           </button>
         </form>
+
+        {!isNew && (
+          <div className="mt-12 pt-8 border-t border-zinc-900/50 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">アカウント・セキュリティ設定</h3>
+              <button onClick={() => setShowSecurity(!showSecurity)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                {showSecurity ? '隠す' : '表示する'}
+              </button>
+            </div>
+            {showSecurity && (
+              <div className="space-y-6">
+                <form onSubmit={handleUpdateCreds} className="space-y-4 p-4 border border-zinc-800 rounded-lg bg-[#080808]">
+                  <p className="text-xs text-zinc-500 mb-4">ユーザーIDやパスワードを変更します。</p>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1 uppercase tracking-wider">現在のパスワード (必須)</label>
+                    <input
+                      type="password"
+                      required
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full bg-[#050505] border border-zinc-800 rounded-md px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1 uppercase tracking-wider">新しいユーザーID (変更する場合のみ)</label>
+                    <input
+                      type="text"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      className="w-full bg-[#050505] border border-zinc-800 rounded-md px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1 uppercase tracking-wider">新しいパスワード (変更する場合のみ)</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-[#050505] border border-zinc-800 rounded-md px-3 py-2 text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors font-sans text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-zinc-800 text-zinc-300 font-medium rounded-md px-4 py-2 hover:bg-zinc-700 transition-colors text-sm disabled:opacity-50 mt-2"
+                    disabled={!currentPassword || (!newUsername && !newPassword)}
+                  >
+                    認証情報を更新
+                  </button>
+                </form>
+
+                <div className="p-4 border border-red-900/30 rounded-lg bg-red-950/10">
+                  <h4 className="text-sm font-medium text-red-500 mb-2">危険な操作</h4>
+                  <p className="text-xs text-zinc-500 mb-4">アカウントを削除すると、すべてのデータが完全に失われます。</p>
+                  <button
+                    onClick={onDeleteAccount}
+                    className="w-full bg-red-500/10 text-red-500 font-medium rounded-md px-4 py-2 border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors text-sm"
+                  >
+                    アカウントを完全に削除する
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -612,15 +792,20 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
       className="min-h-screen flex flex-col items-center p-4 sm:p-6 font-sans relative overflow-x-hidden selection:bg-zinc-800 transition-colors duration-500"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
     >
-      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 max-w-[60%] sm:max-w-none">
-        <div className="font-medium text-base md:text-xl tracking-wide mb-1 opacity-90 truncate">
-          {userData.name}
-        </div>
-        <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase opacity-60">
-          BORN: <span className="opacity-80">{userData.birthDate.replace(/-/g, '.')}</span>
-        </div>
-        <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase mt-0.5 opacity-60">
-          LIFESPAN: <span className="opacity-80">{userData.expectedLifespan} YEARS</span>
+      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 flex items-center gap-3 md:gap-4 max-w-[70%] sm:max-w-none">
+        {userData.avatar && (
+          <img src={userData.avatar} alt="Avatar" className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover border border-zinc-800/50 shadow-lg" />
+        )}
+        <div>
+          <div className="font-medium text-base md:text-xl tracking-wide mb-1 opacity-90 truncate">
+            {userData.name}
+          </div>
+          <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase opacity-60">
+            BORN: <span className="opacity-80">{userData.birthDate.replace(/-/g, '.')}</span>
+          </div>
+          <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase mt-0.5 opacity-60">
+            LIFESPAN: <span className="opacity-80">{userData.expectedLifespan} YEARS</span>
+          </div>
         </div>
       </div>
 

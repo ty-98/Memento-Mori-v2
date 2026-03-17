@@ -24,7 +24,8 @@ if (!USE_KV) {
       notes TEXT,
       bg_color TEXT,
       text_color TEXT,
-      decade_goals TEXT
+      decade_goals TEXT,
+      avatar TEXT
     );
   `);
 
@@ -33,7 +34,8 @@ if (!USE_KV) {
     "ALTER TABLE users ADD COLUMN notes TEXT",
     "ALTER TABLE users ADD COLUMN bg_color TEXT",
     "ALTER TABLE users ADD COLUMN text_color TEXT",
-    "ALTER TABLE users ADD COLUMN decade_goals TEXT"
+    "ALTER TABLE users ADD COLUMN decade_goals TEXT",
+    "ALTER TABLE users ADD COLUMN avatar TEXT"
   ];
   for (const query of migrations) {
     try { db.exec(query); } catch (e) {}
@@ -53,7 +55,7 @@ app.use(express.json());
 
 // API Routes
 app.post("/api/auth/register", async (req, res) => {
-  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals } = req.body;
+  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
@@ -71,7 +73,8 @@ app.post("/api/auth/register", async (req, res) => {
     notes: notes || "",
     bgColor: bgColor || "#050505",
     textColor: textColor || "#fafafa",
-    decadeGoals: decadeGoals || {}
+    decadeGoals: decadeGoals || {},
+    avatar: avatar || null
   };
 
   try {
@@ -85,10 +88,10 @@ app.post("/api/auth/register", async (req, res) => {
       await kv.set(`user:profile:${id}`, newUserData);
     } else {
       const stmt = db.prepare(
-        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       stmt.run(
-        id, username, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals)
+        id, username, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar
       );
     }
     res.json(newUserData);
@@ -134,6 +137,7 @@ app.post("/api/auth/login", async (req, res) => {
         bgColor: user.bg_color,
         textColor: user.text_color,
         decadeGoals: user.decade_goals ? JSON.parse(user.decade_goals) : {},
+        avatar: user.avatar
       });
     }
   } catch (err) {
@@ -144,7 +148,7 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/user/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals } = req.body;
+  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar } = req.body;
 
   try {
     if (USE_KV) {
@@ -152,17 +156,115 @@ app.post("/api/user/:id", async (req, res) => {
       if (!existingProfile) {
         return res.status(404).json({ error: "User not found" });
       }
-      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals };
+      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar };
       await kv.set(`user:profile:${id}`, updatedData);
       return res.json({ success: true });
     } else {
       const stmt = db.prepare(
-        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ? WHERE id = ?"
+        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ? WHERE id = ?"
       );
-      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, id);
+      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, id);
       if (info.changes === 0) {
         return res.status(404).json({ error: "User not found" });
       }
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Credentials update endpoint
+app.put("/api/auth/:id/credentials", async (req, res) => {
+  const { id } = req.params;
+  const { currentPassword, newUsername, newPassword } = req.body;
+
+  if (!currentPassword || (!newUsername && !newPassword)) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const current_password_hash = hashPassword(currentPassword);
+  
+  try {
+    if (USE_KV) {
+      const existingProfile: any = await kv.get(`user:profile:${id}`);
+      if (!existingProfile) return res.status(404).json({ error: "User not found" });
+
+      const oldUsername = existingProfile.username;
+      const creds: any = await kv.get(`user:creds:${oldUsername}`);
+      
+      if (!creds || creds.password_hash !== current_password_hash) {
+        return res.status(401).json({ error: "Invalid current password" });
+      }
+
+      const updatedCreds = { ...creds };
+      let newName = oldUsername;
+
+      if (newPassword) {
+        updatedCreds.password_hash = hashPassword(newPassword);
+      }
+
+      if (newUsername && newUsername !== oldUsername) {
+        const usernameExists = await kv.get(`user:creds:${newUsername}`);
+        if (usernameExists) return res.status(409).json({ error: "Username already exists" });
+        newName = newUsername;
+      }
+
+      if (newUsername && newUsername !== oldUsername) {
+        await kv.del(`user:creds:${oldUsername}`);
+        await kv.set(`user:creds:${newName}`, updatedCreds);
+        const updatedProfile = { ...existingProfile, username: newName };
+        await kv.set(`user:profile:${id}`, updatedProfile);
+      } else if (newPassword) {
+        await kv.set(`user:creds:${newName}`, updatedCreds);
+      }
+
+      return res.json({ success: true, username: newName });
+    } else {
+      const user = db.prepare("SELECT * FROM users WHERE id = ? AND password_hash = ?").get(id, current_password_hash) as any;
+      if (!user) return res.status(401).json({ error: "Invalid current password" });
+
+      let newName = user.username;
+      let newHash = current_password_hash;
+
+      if (newPassword) {
+        newHash = hashPassword(newPassword);
+      }
+      
+      if (newUsername && newUsername !== user.username) {
+        newName = newUsername;
+      }
+
+      const stmt = db.prepare("UPDATE users SET username = ?, password_hash = ? WHERE id = ?");
+      stmt.run(newName, newHash, id);
+      return res.json({ success: true, username: newName });
+    }
+  } catch (err: any) {
+    if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
+      return res.status(409).json({ error: "Username already exists" });
+    }
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete user account endpoint
+app.delete("/api/user/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    if (USE_KV) {
+      const profile: any = await kv.get(`user:profile:${id}`);
+      if (!profile) return res.status(404).json({ error: "User not found" });
+      
+      const username = profile.username;
+      await kv.del(`user:creds:${username}`);
+      await kv.del(`user:profile:${id}`);
+      return res.json({ success: true });
+    } else {
+      const info = db.prepare("DELETE FROM users WHERE id = ?").run(id);
+      if (info.changes === 0) return res.status(404).json({ error: "User not found" });
       return res.json({ success: true });
     }
   } catch (err) {
