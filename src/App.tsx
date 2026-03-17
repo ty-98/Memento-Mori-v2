@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X } from 'lucide-react';
-import { toPng } from 'html-to-image';
 import { ReflectModal } from './components/ReflectModal';
 
 export interface UserData {
@@ -673,42 +672,27 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
-    if (!shareRef.current) return;
     try {
       setIsSharing(true);
-      // Wait for state to update so buttons are hidden
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const shareData = {
+        title: 'Memento Mori',
+        text: `My remaining time... ${userData?.quote}`,
+        url: window.location.origin
+      };
 
-      const dataUrl = await toPng(shareRef.current, {
-        quality: 1.0,
-        pixelRatio: 2,
-        style: {
-          backgroundColor: userData.bgColor || '#050505',
-        }
-      });
-
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'memento-mori.png', { type: 'image/png' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: 'Memento Mori',
-          text: `My remaining time... ${userData.quote}`,
-          files: [file]
-        });
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
       } else {
-        const link = document.createElement('a');
-        link.download = 'memento-mori.png';
-        link.href = dataUrl;
-        link.click();
+        await navigator.clipboard.writeText(window.location.origin);
+        alert('URLをクリップボードにコピーしました！');
       }
     } catch (err: any) {
       if (err.name === 'AbortError' || err.message?.includes('Share canceled')) {
         // User canceled the share, ignore
         return;
       }
-      console.error('Failed to share image', err);
-      alert('画像の生成に失敗しました。');
+      console.error('Failed to share', err);
+      alert('シェアに失敗しました。');
     } finally {
       setIsSharing(false);
     }
