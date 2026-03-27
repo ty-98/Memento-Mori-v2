@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
+import { WeeksVisualizer } from './components/WeeksVisualizer';
+import { StoicQuotes } from './components/StoicQuotes';
+import { TimeAllocation } from './components/TimeAllocation';
 
 export interface UserData {
   id?: string;
@@ -911,6 +914,12 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           />
         </div>
       </motion.div>
+
+      <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
+
+      <WeeksVisualizer birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
+
+      <StoicQuotes textColor={userData.textColor} />
 
       <DecadesList
         birthDate={userData.birthDate}
