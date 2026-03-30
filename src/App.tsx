@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
+import { BucketListModal } from './components/BucketListModal';
 import { StoicQuotes } from './components/StoicQuotes';
 import { TimeAllocation } from './components/TimeAllocation';
+
+export interface BucketItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt: string;
+}
 
 export interface UserData {
   id?: string;
@@ -17,6 +25,7 @@ export interface UserData {
   textColor?: string;
   decadeGoals?: Record<string, string>;
   avatar?: string | null;
+  bucketList?: BucketItem[];
 }
 
 interface TimeLeft {
@@ -57,6 +66,20 @@ const sanitizeUserData = (data: any): UserData => {
     return safeGoals;
   };
 
+  const sanitizeBucketList = (items: any): BucketItem[] => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter((item: any) => item && typeof item === 'object')
+      .slice(0, 200)
+      .map((item: any) => ({
+        id: typeof item.id === 'string' ? item.id.slice(0, 36) : crypto.randomUUID(),
+        text: typeof item.text === 'string' ? item.text.slice(0, 200) : '',
+        completed: typeof item.completed === 'boolean' ? item.completed : false,
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt.slice(0, 30) : new Date().toISOString(),
+      }))
+      .filter((item: any) => item.text.length > 0);
+  };
+
   return {
     id: data.id,
     username: data.username,
@@ -68,7 +91,8 @@ const sanitizeUserData = (data: any): UserData => {
     bgColor: sanitizeColor(data.bgColor || data.bg, '#050505'),
     textColor: sanitizeColor(data.textColor || data.tc, '#fafafa'),
     decadeGoals: sanitizeDecadeGoals(data.decadeGoals || data.dg),
-    avatar: typeof data.avatar === 'string' ? data.avatar : null
+    avatar: typeof data.avatar === 'string' ? data.avatar : null,
+    bucketList: sanitizeBucketList(data.bucketList),
   };
 };
 
@@ -671,6 +695,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [deathDate, setDeathDate] = useState<string>('');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
+  const [isBucketListOpen, setIsBucketListOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
@@ -806,6 +831,13 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
             <Calendar size={18} className="md:w-5 md:h-5" />
           </button> */}
           <button
+            onClick={() => setIsBucketListOpen(true)}
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            title="バケットリスト"
+          >
+            <ListChecks size={18} className="md:w-5 md:h-5" />
+          </button>
+          <button
             onClick={handleShare}
             disabled={isSharing}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
@@ -934,6 +966,13 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
         isOpen={isReflectModalOpen}
         onClose={() => setIsReflectModalOpen(false)}
         userData={userData}
+      />
+      <BucketListModal
+        isOpen={isBucketListOpen}
+        onClose={() => setIsBucketListOpen(false)}
+        items={userData.bucketList ?? []}
+        textColor={userData.textColor}
+        onChange={(items) => onUpdateUserData({ bucketList: items })}
       />
     </div>
   );

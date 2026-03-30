@@ -35,7 +35,8 @@ if (!USE_KV) {
     "ALTER TABLE users ADD COLUMN bg_color TEXT",
     "ALTER TABLE users ADD COLUMN text_color TEXT",
     "ALTER TABLE users ADD COLUMN decade_goals TEXT",
-    "ALTER TABLE users ADD COLUMN avatar TEXT"
+    "ALTER TABLE users ADD COLUMN avatar TEXT",
+    "ALTER TABLE users ADD COLUMN bucket_list TEXT"
   ];
   for (const query of migrations) {
     try { db.exec(query); } catch (e) {}
@@ -55,7 +56,7 @@ app.use(express.json());
 
 // API Routes
 app.post("/api/auth/register", async (req, res) => {
-  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar } = req.body;
+  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
@@ -74,7 +75,8 @@ app.post("/api/auth/register", async (req, res) => {
     bgColor: bgColor || "#050505",
     textColor: textColor || "#fafafa",
     decadeGoals: decadeGoals || {},
-    avatar: avatar || null
+    avatar: avatar || null,
+    bucketList: bucketList || []
   };
 
   try {
@@ -88,10 +90,10 @@ app.post("/api/auth/register", async (req, res) => {
       await kv.set(`user:profile:${id}`, newUserData);
     } else {
       const stmt = db.prepare(
-        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar, bucket_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       stmt.run(
-        id, username, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar
+        id, username, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar, JSON.stringify(newUserData.bucketList)
       );
     }
     res.json(newUserData);
@@ -137,7 +139,8 @@ app.post("/api/auth/login", async (req, res) => {
         bgColor: user.bg_color,
         textColor: user.text_color,
         decadeGoals: user.decade_goals ? JSON.parse(user.decade_goals) : {},
-        avatar: user.avatar
+        avatar: user.avatar,
+        bucketList: user.bucket_list ? JSON.parse(user.bucket_list) : []
       });
     }
   } catch (err) {
@@ -148,7 +151,7 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/user/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar } = req.body;
+  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList } = req.body;
 
   try {
     if (USE_KV) {
@@ -156,14 +159,14 @@ app.post("/api/user/:id", async (req, res) => {
       if (!existingProfile) {
         return res.status(404).json({ error: "User not found" });
       }
-      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar };
+      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList };
       await kv.set(`user:profile:${id}`, updatedData);
       return res.json({ success: true });
     } else {
       const stmt = db.prepare(
-        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ? WHERE id = ?"
+        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ?, bucket_list = ? WHERE id = ?"
       );
-      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, id);
+      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, bucketList ? JSON.stringify(bucketList) : null, id);
       if (info.changes === 0) {
         return res.status(404).json({ error: "User not found" });
       }
