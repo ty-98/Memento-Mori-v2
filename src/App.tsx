@@ -899,6 +899,9 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
               <div className="mt-8 w-full max-w-2xl">
                 <StoicQuotes textColor={userData.textColor} />
               </div>
+              <div className="w-full max-w-3xl mt-4">
+                <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
+              </div>
             </motion.div>
           </div>
         )}
@@ -923,7 +926,6 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
                 />
               </div>
             </div>
-            <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
           </motion.div>
         )}
 
