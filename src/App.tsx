@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, Target } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
-import { BucketListModal } from './components/BucketListModal';
-import { AdvisorModal } from './components/AdvisorModal';
+import { BucketListPanel } from './components/BucketListPanel';
+import { AdvisorPanel } from './components/AdvisorPanel';
 import { StoicQuotes } from './components/StoicQuotes';
 import { TimeAllocation } from './components/TimeAllocation';
 
@@ -694,11 +694,9 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
   const [progress, setProgress] = useState({ elapsed: 0, remaining: 100 });
   const [deathDate, setDeathDate] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'goals'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'bucket' | 'advisor'>('home');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
-  const [isBucketListOpen, setIsBucketListOpen] = useState(false);
-  const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
@@ -803,7 +801,8 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const TAB_ITEMS = [
     { tab: 'home', icon: Home, label: 'HOME' },
     { tab: 'life', icon: Heart, label: 'LIFE' },
-    { tab: 'goals', icon: Target, label: 'GOALS' },
+    { tab: 'bucket', icon: ListChecks, label: 'BUCKET' },
+    { tab: 'advisor', icon: Compass, label: 'ADVISOR' },
   ] as const;
 
   return (
@@ -828,12 +827,6 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
         {!isSharing && (
           <div className="flex gap-0.5 shrink-0">
-            <button onClick={() => setIsAdvisorOpen(true)} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="Life Advisor">
-              <Compass size={17} />
-            </button>
-            <button onClick={() => setIsBucketListOpen(true)} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="Bucket List">
-              <ListChecks size={17} />
-            </button>
             <button onClick={handleShare} disabled={isSharing} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="シェア">
               <Share2 size={17} />
             </button>
@@ -897,6 +890,17 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
               <div className="w-full max-w-3xl mt-4">
                 <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
               </div>
+              <div className="w-full max-w-3xl mt-4">
+                <DecadesList
+                  birthDate={userData.birthDate}
+                  expectedLifespan={userData.expectedLifespan}
+                  decadeGoals={userData.decadeGoals}
+                  textColor={userData.textColor}
+                  onUpdateGoal={(decade, goal) => {
+                    onUpdateUserData({ decadeGoals: { ...(userData.decadeGoals || {}), [decade]: goal } });
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -924,23 +928,32 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           </motion.div>
         )}
 
-        {/* GOALS */}
-        {activeTab === 'goals' && (
+        {/* BUCKET */}
+        {activeTab === 'bucket' && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
             className="max-w-3xl mx-auto px-4 py-8"
           >
-            <DecadesList
-              birthDate={userData.birthDate}
-              expectedLifespan={userData.expectedLifespan}
-              decadeGoals={userData.decadeGoals}
-              textColor={userData.textColor}
-              onUpdateGoal={(decade, goal) => {
-                onUpdateUserData({ decadeGoals: { ...(userData.decadeGoals || {}), [decade]: goal } });
-              }}
+            <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Bucket List</h3>
+            <BucketListPanel
+              items={userData.bucketList ?? []}
+              onChange={(items) => onUpdateUserData({ bucketList: items })}
             />
+          </motion.div>
+        )}
+
+        {/* ADVISOR */}
+        {activeTab === 'advisor' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="max-w-3xl mx-auto px-4 py-8"
+          >
+            <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Life Advisor</h3>
+            <AdvisorPanel userData={userData} onUpdateUserData={onUpdateUserData} />
           </motion.div>
         )}
 
@@ -970,8 +983,6 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       {/* モーダル */}
       <ReflectModal isOpen={isReflectModalOpen} onClose={() => setIsReflectModalOpen(false)} userData={userData} />
-      <BucketListModal isOpen={isBucketListOpen} onClose={() => setIsBucketListOpen(false)} items={userData.bucketList ?? []} textColor={userData.textColor} onChange={(items) => onUpdateUserData({ bucketList: items })} />
-      <AdvisorModal isOpen={isAdvisorOpen} onClose={() => setIsAdvisorOpen(false)} userData={userData} onUpdateUserData={onUpdateUserData} />
     </div>
   );
 }
