@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, Target, BookOpen } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListModal } from './components/BucketListModal';
 import { AdvisorModal } from './components/AdvisorModal';
@@ -694,6 +694,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
   const [progress, setProgress] = useState({ elapsed: 0, remaining: 100 });
   const [deathDate, setDeathDate] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'goals' | 'wisdom'>('home');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isBucketListOpen, setIsBucketListOpen] = useState(false);
@@ -799,196 +800,188 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
     return () => cancelAnimationFrame(animationFrameId);
   }, [userData]);
 
+  const TAB_ITEMS = [
+    { tab: 'home', icon: Home, label: 'HOME' },
+    { tab: 'life', icon: Heart, label: 'LIFE' },
+    { tab: 'goals', icon: Target, label: 'GOALS' },
+    { tab: 'wisdom', icon: BookOpen, label: 'WISDOM' },
+  ] as const;
+
   return (
     <div
       ref={shareRef}
-      className="min-h-screen flex flex-col items-center p-4 sm:p-6 font-sans relative overflow-x-hidden selection:bg-zinc-800 transition-colors duration-500"
+      className="h-screen flex flex-col font-sans selection:bg-zinc-800 transition-colors duration-500 overflow-hidden"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
     >
-      <div className="absolute top-4 left-4 md:top-8 md:left-8 z-10 flex items-center gap-3 md:gap-4 max-w-[70%] sm:max-w-none">
-        {userData.avatar && (
-          <img src={userData.avatar} alt="Avatar" className="w-10 h-10 md:w-14 md:h-14 rounded-full object-cover border border-zinc-800/50 shadow-lg" />
-        )}
-        <div>
-          <div className="font-medium text-base md:text-xl tracking-wide mb-1 opacity-90 truncate">
-            {userData.name}
-          </div>
-          <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase opacity-60">
-            BORN: <span className="opacity-80">{userData.birthDate.replace(/-/g, '.')}</span>
-          </div>
-          <div className="text-[9px] md:text-xs font-mono tracking-widest uppercase mt-0.5 opacity-60">
-            LIFESPAN: <span className="opacity-80">{userData.expectedLifespan} YEARS</span>
+      {/* ── ヘッダー ── */}
+      <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2 md:px-8 md:pt-5 md:pb-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+          {userData.avatar && (
+            <img src={userData.avatar} alt="Avatar" className="w-9 h-9 md:w-11 md:h-11 rounded-full object-cover border border-zinc-800/50 shadow-lg shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div className="font-medium text-sm md:text-lg tracking-wide opacity-90 truncate">{userData.name}</div>
+            <div className="text-[9px] font-mono tracking-widest uppercase opacity-50 truncate">
+              BORN: {userData.birthDate.replace(/-/g, '.')} · {userData.expectedLifespan}Y
+            </div>
           </div>
         </div>
+
+        {!isSharing && (
+          <div className="flex gap-0.5 shrink-0">
+            <button onClick={() => setIsAdvisorOpen(true)} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="Life Advisor">
+              <Compass size={17} />
+            </button>
+            <button onClick={() => setIsBucketListOpen(true)} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="Bucket List">
+              <ListChecks size={17} />
+            </button>
+            <button onClick={handleShare} disabled={isSharing} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="シェア">
+              <Share2 size={17} />
+            </button>
+            <button onClick={onEdit} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="設定">
+              <Settings size={17} />
+            </button>
+            <button onClick={onLogout} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="ログアウト">
+              <LogOut size={17} />
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* ── タブコンテンツ ── */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+
+        {/* HOME */}
+        {activeTab === 'home' && (
+          <div className="h-full flex flex-col items-center justify-center px-4 py-4">
+            <motion.div
+              initial={{ opacity: 0, filter: 'blur(10px)' }}
+              animate={{ opacity: 1, filter: 'blur(0px)' }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="w-full max-w-4xl flex flex-col items-center"
+            >
+              <InlineEdit
+                value={userData.quote}
+                onSave={(val) => onUpdateUserData({ quote: val })}
+                className="text-xs md:text-lg tracking-[0.15em] md:tracking-[0.2em] font-light mb-7 md:mb-10 max-w-[90%] md:max-w-2xl mx-auto leading-relaxed opacity-80 block text-center"
+                placeholder="Double tap to set your quote..."
+              />
+              <div className="flex flex-wrap justify-center items-baseline gap-x-3 sm:gap-x-5 md:gap-x-8 gap-y-4 md:gap-y-8 mb-10 md:mb-14">
+                <TimeBlock value={timeLeft.years} label="YEARS" />
+                <TimeBlock value={pad(timeLeft.months)} label="MONTHS" />
+                <TimeBlock value={pad(timeLeft.days)} label="DAYS" />
+                <TimeBlock value={pad(timeLeft.hours)} label="HOURS" />
+                <TimeBlock value={pad(timeLeft.minutes)} label="MINS" />
+                <TimeBlock value={pad(timeLeft.seconds)} label="SECS" />
+                <TimeBlock value={pad(Math.floor(timeLeft.milliseconds / 10))} label="MS" />
+              </div>
+              <div className="w-full max-w-2xl space-y-4">
+                <div className="flex justify-between items-end">
+                  <div className="text-[10px] font-mono tracking-widest uppercase flex flex-col gap-1 opacity-50">
+                    <span>Elapsed {progress.elapsed.toFixed(4)}%</span>
+                    <span>Remaining {progress.remaining.toFixed(4)}%</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] tracking-[0.2em] uppercase block mb-1 opacity-50">Expected End Date</span>
+                    <span className="font-mono text-sm tracking-widest opacity-70">{deathDate}</span>
+                  </div>
+                </div>
+                <div className="relative w-full h-7">
+                  <motion.div className="absolute bottom-0 opacity-80" style={{ left: `${progress.elapsed}%`, x: '-50%' }}>
+                    <WalkingIcon />
+                  </motion.div>
+                </div>
+                <div className="h-[2px] w-full flex rounded-full">
+                  <div className="h-full" style={{ width: `${progress.elapsed}%`, backgroundColor: 'currentColor', opacity: 0.15 }} />
+                  <div className="h-full" style={{ width: `${progress.remaining}%`, backgroundColor: 'currentColor', opacity: 0.9, boxShadow: '0 0 10px currentColor' }} />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* LIFE */}
+        {activeTab === 'life' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="max-w-3xl mx-auto px-4 py-8 space-y-10"
+          >
+            <div>
+              <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Important Things</h3>
+              <div className="text-sm md:text-base leading-loose whitespace-pre-wrap font-light opacity-80">
+                <InlineEdit
+                  value={userData.notes || ''}
+                  onSave={(val) => onUpdateUserData({ notes: val })}
+                  multiline
+                  className="w-full"
+                  placeholder="Double tap to add important notes..."
+                />
+              </div>
+            </div>
+            <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
+          </motion.div>
+        )}
+
+        {/* GOALS */}
+        {activeTab === 'goals' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="max-w-3xl mx-auto px-4 py-8"
+          >
+            <DecadesList
+              birthDate={userData.birthDate}
+              expectedLifespan={userData.expectedLifespan}
+              decadeGoals={userData.decadeGoals}
+              textColor={userData.textColor}
+              onUpdateGoal={(decade, goal) => {
+                onUpdateUserData({ decadeGoals: { ...(userData.decadeGoals || {}), [decade]: goal } });
+              }}
+            />
+          </motion.div>
+        )}
+
+        {/* WISDOM */}
+        {activeTab === 'wisdom' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="h-full flex items-center justify-center px-4 py-8"
+          >
+            <StoicQuotes textColor={userData.textColor} />
+          </motion.div>
+        )}
+      </div>
+
+      {/* ── ボトムナビゲーション ── */}
       {!isSharing && (
-        <div className="absolute top-4 right-4 md:top-8 md:right-8 flex gap-1 md:gap-2 z-10 bg-[#050505]/50 backdrop-blur-sm rounded-full sm:bg-transparent sm:backdrop-blur-none p-1 sm:p-0">
-          {/* まだコスト等の懸念があるため、一旦非公開にする（カレンダーボタンを隠す） */}
-          {/* <button
-            onClick={() => setIsReflectModalOpen(true)}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="カレンダー振り返り"
-          >
-            <Calendar size={18} className="md:w-5 md:h-5" />
-          </button> */}
-          <button
-            onClick={() => setIsAdvisorOpen(true)}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="Life Advisor"
-          >
-            <Compass size={18} className="md:w-5 md:h-5" />
-          </button>
-          <button
-            onClick={() => setIsBucketListOpen(true)}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="バケットリスト"
-          >
-            <ListChecks size={18} className="md:w-5 md:h-5" />
-          </button>
-          <button
-            onClick={handleShare}
-            disabled={isSharing}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="シェア"
-          >
-            <Share2 size={18} className="md:w-5 md:h-5" />
-          </button>
-          <button
-            onClick={onEdit}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="設定"
-          >
-            <Settings size={18} className="md:w-5 md:h-5" />
-          </button>
-          <button
-            onClick={onLogout}
-            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
-            title="ログアウト"
-          >
-            <LogOut size={18} className="md:w-5 md:h-5" />
-          </button>
+        <div
+          className="shrink-0 border-t border-zinc-900/80 flex backdrop-blur-sm"
+          style={{ backgroundColor: `${userData.bgColor || '#050505'}E6` }}
+        >
+          {TAB_ITEMS.map(({ tab, icon: Icon, label }) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 pb-4 transition-all duration-200 ${
+                activeTab === tab ? 'opacity-100' : 'opacity-25 hover:opacity-60'
+              }`}
+            >
+              <Icon size={18} />
+              <span className="text-[8px] tracking-[0.2em] uppercase font-medium">{label}</span>
+            </button>
+          ))}
         </div>
       )}
 
-      <div className="flex-1 w-full flex flex-col items-center justify-center mt-32 md:mt-0">
-        <motion.div
-          initial={{ opacity: 0, filter: 'blur(10px)' }}
-          animate={{ opacity: 1, filter: 'blur(0px)' }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="w-full max-w-5xl flex flex-col items-center"
-        >
-          <div className="text-center mb-16 md:mb-20 w-full px-2">
-            <InlineEdit
-              value={userData.quote}
-              onSave={(val) => onUpdateUserData({ quote: val })}
-              className="text-sm md:text-xl tracking-[0.15em] md:tracking-[0.2em] font-light mb-8 md:mb-12 max-w-[90%] md:max-w-2xl mx-auto leading-relaxed opacity-90 block"
-              placeholder="Double tap to set your quote..."
-            />
-
-            <div className="flex flex-wrap justify-center items-baseline gap-x-3 sm:gap-x-6 md:gap-x-8 gap-y-6 md:gap-y-8">
-              <TimeBlock value={timeLeft.years} label="YEARS" />
-              <TimeBlock value={pad(timeLeft.months)} label="MONTHS" />
-              <TimeBlock value={pad(timeLeft.days)} label="DAYS" />
-              <TimeBlock value={pad(timeLeft.hours)} label="HOURS" />
-              <TimeBlock value={pad(timeLeft.minutes)} label="MINS" />
-              <TimeBlock value={pad(timeLeft.seconds)} label="SECS" />
-              <TimeBlock value={pad(Math.floor(timeLeft.milliseconds / 10))} label="MS" />
-            </div>
-          </div>
-
-          <div className="w-full max-w-3xl space-y-6">
-            <div className="flex justify-between items-end">
-              <div className="text-[10px] md:text-xs font-mono tracking-widest uppercase flex flex-col gap-1 opacity-60">
-                <span>Elapsed {progress.elapsed.toFixed(6)}%</span>
-                <span className="opacity-90">Remaining {progress.remaining.toFixed(6)}%</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[9px] md:text-[10px] tracking-[0.2em] uppercase block mb-1 opacity-60">Expected End Date</span>
-                <span className="font-mono text-sm md:text-base tracking-widest opacity-80">{deathDate}</span>
-              </div>
-            </div>
-
-            <div className="relative w-full h-8 mb-1">
-              <motion.div
-                className="absolute bottom-0 opacity-90"
-                style={{ left: `${progress.elapsed}%`, x: '-50%' }}
-              >
-                <WalkingIcon />
-              </motion.div>
-            </div>
-            <div className="h-[2px] w-full flex rounded-full">
-              <div
-                className="h-full"
-                style={{ width: `${progress.elapsed}%`, backgroundColor: 'currentColor', opacity: 0.15 }}
-              />
-              <div
-                className="h-full relative"
-                style={{
-                  width: `${progress.remaining}%`,
-                  backgroundColor: 'currentColor',
-                  opacity: 0.9,
-                  boxShadow: '0 0 10px currentColor'
-                }}
-              />
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5, duration: 1 }}
-        className="w-full max-w-3xl mt-12 pb-8"
-      >
-        <div className="w-12 h-[1px] mx-auto mb-8 opacity-20" style={{ backgroundColor: 'currentColor' }} />
-        <h3 className="text-[10px] tracking-[0.3em] uppercase mb-6 text-center font-medium opacity-60">Important Things</h3>
-        <div className="text-sm md:text-base leading-loose whitespace-pre-wrap text-center max-w-2xl mx-auto font-light opacity-80">
-          <InlineEdit
-            value={userData.notes || ''}
-            onSave={(val) => onUpdateUserData({ notes: val })}
-            multiline
-            className="w-full text-center"
-            placeholder="Double tap to add important notes..."
-          />
-        </div>
-      </motion.div>
-
-      <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
-
-      <StoicQuotes textColor={userData.textColor} />
-
-      <DecadesList
-        birthDate={userData.birthDate}
-        expectedLifespan={userData.expectedLifespan}
-        decadeGoals={userData.decadeGoals}
-        textColor={userData.textColor}
-        onUpdateGoal={(decade, goal) => {
-          onUpdateUserData({
-            decadeGoals: { ...(userData.decadeGoals || {}), [decade]: goal }
-          });
-        }}
-      />
-
-      <ReflectModal
-        isOpen={isReflectModalOpen}
-        onClose={() => setIsReflectModalOpen(false)}
-        userData={userData}
-      />
-      <BucketListModal
-        isOpen={isBucketListOpen}
-        onClose={() => setIsBucketListOpen(false)}
-        items={userData.bucketList ?? []}
-        textColor={userData.textColor}
-        onChange={(items) => onUpdateUserData({ bucketList: items })}
-      />
-      <AdvisorModal
-        isOpen={isAdvisorOpen}
-        onClose={() => setIsAdvisorOpen(false)}
-        userData={userData}
-        onUpdateUserData={onUpdateUserData}
-      />
+      {/* モーダル */}
+      <ReflectModal isOpen={isReflectModalOpen} onClose={() => setIsReflectModalOpen(false)} userData={userData} />
+      <BucketListModal isOpen={isBucketListOpen} onClose={() => setIsBucketListOpen(false)} items={userData.bucketList ?? []} textColor={userData.textColor} onChange={(items) => onUpdateUserData({ bucketList: items })} />
+      <AdvisorModal isOpen={isAdvisorOpen} onClose={() => setIsAdvisorOpen(false)} userData={userData} onUpdateUserData={onUpdateUserData} />
     </div>
   );
 }

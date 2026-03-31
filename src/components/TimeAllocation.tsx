@@ -28,10 +28,9 @@ export function TimeAllocation({ birthDate, expectedLifespan, textColor }: { bir
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: 0.6, duration: 1 }}
-      className="w-full max-w-3xl mt-12 mb-8 px-4"
+      className="w-full max-w-3xl px-4"
     >
-      <div className="w-12 h-[1px] mx-auto mb-8 opacity-20" style={{ backgroundColor: 'currentColor' }} />
-      <h3 className="text-[10px] tracking-[0.3em] uppercase mb-8 text-center font-medium opacity-60">
+      <h3 className="text-[10px] tracking-[0.3em] uppercase mb-6 text-center font-medium opacity-50">
         Estimated Time Allocation ({remainingYears.toFixed(1)} years left)
       </h3>
 
