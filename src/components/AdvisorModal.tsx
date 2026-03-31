@@ -1,22 +1,34 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Brain, Loader2, RotateCcw } from 'lucide-react';
-import { UserData } from '../App';
+import { X, Compass, Sparkles, Loader2 } from 'lucide-react';
+import { BucketItem, UserData } from '../App';
+
+type Step = 'topic' | 'questioning' | 'answering' | 'analyzing' | 'proposals';
+
+interface Proposal {
+  type: 'bucketList' | 'decadeGoal' | 'notes' | 'quote';
+  value: string;
+  decade?: number;
+  reason: string;
+  applied: boolean;
+  skipped: boolean;
+}
 
 interface AdvisorModalProps {
   isOpen: boolean;
   onClose: () => void;
   userData: UserData;
+  onUpdateUserData: (data: Partial<UserData>) => void;
 }
 
-const DAILY_LIMIT = 10;
-const STORAGE_KEY = 'advisor_usage';
+const SESSION_LIMIT = 3;
+const STORAGE_KEY = 'advisor_sessions';
 
 function getTodayKey() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return new Date().toISOString().slice(0, 10);
 }
 
-function getDailyUsage(): number {
+function getDailySessions(): number {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return 0;
@@ -28,104 +40,208 @@ function getDailyUsage(): number {
   }
 }
 
-function incrementDailyUsage(): number {
-  const count = getDailyUsage() + 1;
+function incrementSessions(): number {
+  const count = getDailySessions() + 1;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: getTodayKey(), count }));
   return count;
 }
 
-function buildPrompt(userData: UserData, question: string): string {
+function buildContext(userData: UserData): string {
   const now = new Date();
   const birth = new Date(userData.birthDate);
-  const ageYears = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-  const remainingYears = userData.expectedLifespan - ageYears;
-
-  const decadeGoalsText = userData.decadeGoals
-    ? Object.entries(userData.decadeGoals)
-        .map(([decade, goal]) => `  ${decade}代: ${goal}`)
-        .join('\n')
-    : '未設定';
-
-  const bucketListText = userData.bucketList && userData.bucketList.length > 0
-    ? userData.bucketList
-        .filter(i => !i.completed)
-        .slice(0, 10)
-        .map(i => `  - ${i.text}`)
-        .join('\n')
-    : '未設定';
-
-  return `あなたは人生の意思決定を支援するLife Intelligenceアドバイザーです。
-以下のユーザー情報を踏まえた上で、ユーザーの問いに対して深く、率直に答えてください。
-
-【ユーザー情報】
-- 名前: ${userData.name}
-- 現在の年齢: ${ageYears}歳
-- 残り推定年数: 約${remainingYears}年
-- 座右の銘: ${userData.quote}
-- 人生のメモ: ${userData.notes || '未設定'}
-- 10年ごとの目標:
-${decadeGoalsText}
-- バケツリスト（未達成）:
-${bucketListText}
-
-【ユーザーの問い】
-${question}
-
-【回答の方針】
-- 残り時間の有限性を意識した視点で答えること
-- 一般論ではなく、このユーザーの状況・価値観に即した内容にすること
-- 400〜600文字程度、日本語で回答すること
-- 背中を押すだけでなく、正直なトレードオフも伝えること`;
+  const age = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+  const remaining = userData.expectedLifespan - age;
+  const goals = userData.decadeGoals
+    ? Object.entries(userData.decadeGoals).map(([d, g]) => `${d}代: ${g}`).join('、')
+    : 'なし';
+  const bucket = userData.bucketList?.filter(i => !i.completed).slice(0, 5).map(i => i.text).join('、') || 'なし';
+  return `名前: ${userData.name} / 年齢: ${age}歳 / 残り推定: ${remaining}年 / 座右の銘: "${userData.quote}" / 10年目標: ${goals} / バケツリスト: ${bucket} / 大切にしていること: ${userData.notes || 'なし'}`;
 }
 
-export function AdvisorModal({ isOpen, onClose, userData }: AdvisorModalProps) {
+const THEMES = [
+  { label: '仕事・キャリア', emoji: '💼' },
+  { label: '時間の使い方', emoji: '⏳' },
+  { label: 'やりたいこと', emoji: '✨' },
+  { label: '人間関係', emoji: '🤝' },
+  { label: '自分の在り方', emoji: '🧭' },
+];
+
+export function AdvisorModal({ isOpen, onClose, userData, onUpdateUserData }: AdvisorModalProps) {
+  const [step, setStep] = useState<Step>('topic');
+  const [topic, setTopic] = useState('');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
+  const [insight, setInsight] = useState('');
+  const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [usageCount, setUsageCount] = useState(() => getDailyUsage());
+  const [sessionCount, setSessionCount] = useState(() => getDailySessions());
 
-  const remaining = DAILY_LIMIT - usageCount;
+  const remaining = SESSION_LIMIT - sessionCount;
 
-  const handleAsk = async () => {
-    const q = question.trim();
-    if (!q) return;
+  const callGemini = async (prompt: string): Promise<string> => {
+    const res = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'AIの応答に失敗しました');
+    }
+    const data = await res.json();
+    return data.text ?? '';
+  };
+
+  const handleTopicSubmit = async () => {
+    const t = topic.trim();
+    if (!t) return;
     if (remaining <= 0) {
-      setError('本日の利用上限（10回）に達しました。明日またご利用ください。');
+      setError('本日のご利用上限（3回）に達しました。また明日お話ししましょう。');
       return;
     }
 
     setLoading(true);
     setError('');
-    setAnswer('');
+    setStep('questioning');
 
     try {
-      const prompt = buildPrompt(userData, q);
-      const res = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const ctx = buildContext(userData);
+      const prompt = `あなたは洗練されたライフコンサルタントです。フレンドリーで知的、フォーマルすぎない語り口でお願いします。
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'AIの応答に失敗しました');
-      }
+ユーザー情報: ${ctx}
+相談テーマ: 「${t}」
 
-      const data = await res.json();
-      setAnswer(data.text ?? '');
-      const newCount = incrementDailyUsage();
-      setUsageCount(newCount);
+このユーザーの状況を踏まえた上で、テーマについて本質的な洞察を引き出す「1つの深い質問」を日本語で生成してください。
+- このユーザーの具体的な状況に即した質問にすること
+- 答えることで自分の優先事項や価値観を再発見できる問いにすること
+- 2〜3文程度、問いかけのみを返すこと（前置き・解説は不要）`;
+
+      const q = await callGemini(prompt);
+      setQuestion(q.trim());
+      setStep('answering');
     } catch (e: any) {
-      setError(e.message || 'エラーが発生しました');
+      setError(e.message);
+      setStep('topic');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setAnswer('');
+  const handleAnswerSubmit = async () => {
+    const a = answer.trim();
+    if (!a) return;
+
+    setLoading(true);
+    setError('');
+    setStep('analyzing');
+
+    try {
+      const ctx = buildContext(userData);
+      const birth = new Date(userData.birthDate);
+      const age = Math.floor((new Date().getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+      const currentDecade = Math.floor(age / 10) * 10;
+
+      const prompt = `あなたは洗練されたライフコンサルタントです。
+
+ユーザー情報: ${ctx}
+現在の年代: ${currentDecade}代
+
+【会話】
+コンサルタントの質問: ${question}
+ユーザーの答え: ${a}
+
+この会話を分析し、以下のJSON形式のみで応答してください（コードブロック・説明文は不要）。
+
+{
+  "insight": "会話から読み取れる洞察を2〜3文で（ユーザーに語りかける口調で）",
+  "proposals": [
+    {
+      "type": "bucketList" または "decadeGoal" または "notes" または "quote",
+      "value": "提案するテキスト",
+      "decade": ${currentDecade},
+      "reason": "なぜこれを提案するか15文字以内で"
+    }
+  ]
+}
+
+proposals は最大3件、本当に意味のある提案のみ。
+type の説明:
+- bucketList: 死ぬまでにやりたいこととして追加すべきもの
+- decadeGoal: この年代の目標として設定すべきもの（decade フィールド必須）
+- notes: 大切にしていること・Important Things として記録すべき気づき
+- quote: 座右の銘として採用すべき言葉（確信がある場合のみ）`;
+
+      const raw = await callGemini(prompt);
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('回答の解析に失敗しました。もう一度お試しください。');
+
+      const result = JSON.parse(jsonMatch[0]);
+      setInsight(result.insight ?? '');
+      setProposals((result.proposals ?? []).map((p: any) => ({ ...p, applied: false, skipped: false })));
+
+      const newCount = incrementSessions();
+      setSessionCount(newCount);
+      setStep('proposals');
+    } catch (e: any) {
+      setError(e.message);
+      setStep('answering');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyProposal = (index: number) => {
+    const p = proposals[index];
+    if (p.type === 'bucketList') {
+      const newItem: BucketItem = {
+        id: crypto.randomUUID(),
+        text: p.value,
+        completed: false,
+        createdAt: new Date().toISOString(),
+      };
+      onUpdateUserData({ bucketList: [...(userData.bucketList ?? []), newItem] });
+    } else if (p.type === 'decadeGoal' && p.decade !== undefined) {
+      onUpdateUserData({ decadeGoals: { ...(userData.decadeGoals ?? {}), [p.decade]: p.value } });
+    } else if (p.type === 'notes') {
+      const existing = userData.notes ? userData.notes + '\n\n' : '';
+      onUpdateUserData({ notes: existing + p.value });
+    } else if (p.type === 'quote') {
+      onUpdateUserData({ quote: p.value });
+    }
+    setProposals(prev => prev.map((item, i) => i === index ? { ...item, applied: true } : item));
+  };
+
+  const skipProposal = (index: number) => {
+    setProposals(prev => prev.map((item, i) => i === index ? { ...item, skipped: true } : item));
+  };
+
+  const proposalLabel = (p: Proposal) => {
+    if (p.type === 'bucketList') return 'Bucket List';
+    if (p.type === 'decadeGoal') return `${p.decade}代の目標`;
+    if (p.type === 'notes') return 'Important Things';
+    if (p.type === 'quote') return '座右の銘';
+    return '';
+  };
+
+  const handleClose = () => {
+    setStep('topic');
+    setTopic('');
     setQuestion('');
+    setAnswer('');
+    setInsight('');
+    setProposals([]);
+    setError('');
+    onClose();
+  };
+
+  const handleReset = () => {
+    setStep('topic');
+    setTopic('');
+    setQuestion('');
+    setAnswer('');
+    setInsight('');
+    setProposals([]);
     setError('');
   };
 
@@ -138,7 +254,7 @@ export function AdvisorModal({ isOpen, onClose, userData }: AdvisorModalProps) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
       >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -148,88 +264,156 @@ export function AdvisorModal({ isOpen, onClose, userData }: AdvisorModalProps) {
           onClick={(e) => e.stopPropagation()}
           style={{ color: userData.textColor || '#fafafa' }}
         >
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 opacity-60 hover:opacity-100 hover:bg-zinc-900 rounded-full transition-all"
-          >
+          <button onClick={handleClose} className="absolute top-4 right-4 p-2 opacity-60 hover:opacity-100 hover:bg-zinc-900 rounded-full transition-all">
             <X size={20} />
           </button>
 
-          <div className="flex items-center gap-3 mb-2">
-            <Brain className="opacity-80" size={24} />
+          <div className="flex items-center gap-3 mb-1">
+            <Compass className="opacity-80" size={22} />
             <h2 className="text-xl font-light tracking-wide">Life Advisor</h2>
           </div>
-          <p className="text-zinc-500 text-xs mb-6 leading-relaxed">
-            あなたの残り時間・目標・価値観を踏まえて、人生の意思決定を一緒に考えます。
-          </p>
+          <p className="text-zinc-600 text-xs mb-6">本日残り {remaining}/{SESSION_LIMIT} セッション</p>
 
-          {!answer && !loading && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-2 uppercase tracking-wider">
-                  今、どんな問いと向き合っていますか？
-                </label>
-                <textarea
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  placeholder="例：転職すべきか迷っています。今の仕事は安定しているが、やりがいが感じられない..."
-                  rows={5}
-                  maxLength={1000}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600 resize-none leading-relaxed"
-                />
-                <div className="flex justify-between mt-1">
-                  <span className="text-xs text-zinc-600">{question.length}/1000</span>
-                  <span className="text-xs text-zinc-600">本日残り {remaining}/{DAILY_LIMIT} 回</span>
-                </div>
+          {/* TOPIC */}
+          {step === 'topic' && (
+            <div className="space-y-5">
+              <p className="text-sm opacity-80 leading-relaxed">今日は何について話しましょうか？</p>
+              <div className="flex flex-wrap gap-2">
+                {THEMES.map(t => (
+                  <button
+                    key={t.label}
+                    onClick={() => setTopic(t.label)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
+                      topic === t.label
+                        ? 'border-zinc-400 bg-zinc-800 opacity-100'
+                        : 'border-zinc-800 opacity-50 hover:opacity-100'
+                    }`}
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                ))}
               </div>
-
-              {error && (
-                <div className="text-red-400 text-sm bg-red-400/10 p-4 rounded-lg border border-red-400/20">
-                  {error}
-                </div>
-              )}
-
+              <input
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleTopicSubmit()}
+                placeholder="または自由に入力..."
+                maxLength={100}
+                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600"
+              />
+              {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
               <button
-                onClick={handleAsk}
-                disabled={!question.trim() || remaining <= 0}
-                className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                onClick={handleTopicSubmit}
+                disabled={!topic.trim() || remaining <= 0}
+                className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <Brain size={18} />
-                <span>問いかける</span>
+                <Sparkles size={15} />
+                話してみる
               </button>
             </div>
           )}
 
-          {loading && (
-            <div className="py-16 flex flex-col items-center justify-center text-center space-y-4">
-              <Loader2 size={32} className="animate-spin opacity-60" />
-              <p className="text-zinc-400 tracking-wide text-sm">あなたの人生を読み込んでいます...</p>
+          {/* LOADING QUESTION */}
+          {step === 'questioning' && (
+            <div className="py-16 flex flex-col items-center text-center space-y-4">
+              <Loader2 size={28} className="animate-spin opacity-50" />
+              <p className="text-zinc-500 text-sm tracking-wide">あなたの人生を読み込んでいます...</p>
             </div>
           )}
 
-          {answer && !loading && (
-            <div className="space-y-6 animate-in fade-in duration-700">
-              <div className="border-b border-zinc-800 pb-4">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">あなたの問い</p>
-                <p className="text-sm opacity-80 leading-relaxed">{question}</p>
+          {/* ANSWERING */}
+          {step === 'answering' && (
+            <div className="space-y-5">
+              <div className="border-l-2 border-zinc-700 pl-4">
+                <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap">{question}</p>
               </div>
-
-              <div
-                className="text-sm md:text-base leading-loose font-light opacity-90 whitespace-pre-wrap"
+              <textarea
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="思ったことを素直に..."
+                rows={6}
+                maxLength={1000}
+                className="w-full bg-[#050505] border border-zinc-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600 resize-none leading-relaxed"
+                autoFocus
+              />
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-600">{answer.length}/1000</span>
+              </div>
+              {error && <p className="text-red-400 text-sm bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
+              <button
+                onClick={handleAnswerSubmit}
+                disabled={!answer.trim()}
+                className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-3 hover:bg-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                {answer}
-              </div>
+                答える
+              </button>
+            </div>
+          )}
 
-              <div className="pt-4 border-t border-zinc-800 flex items-center justify-between">
-                <button
-                  onClick={handleReset}
-                  className="flex items-center gap-2 text-xs text-zinc-500 uppercase tracking-widest hover:text-zinc-300 transition-colors"
-                >
-                  <RotateCcw size={12} />
-                  別の問いを立てる
-                </button>
-                <span className="text-xs text-zinc-600">本日残り {DAILY_LIMIT - usageCount}/{DAILY_LIMIT} 回</span>
-              </div>
+          {/* ANALYZING */}
+          {step === 'analyzing' && (
+            <div className="py-16 flex flex-col items-center text-center space-y-4">
+              <Loader2 size={28} className="animate-spin opacity-50" />
+              <p className="text-zinc-500 text-sm tracking-wide">あなたの答えを整理しています...</p>
+            </div>
+          )}
+
+          {/* PROPOSALS */}
+          {step === 'proposals' && (
+            <div className="space-y-5 animate-in fade-in duration-700">
+              {insight && (
+                <div className="bg-zinc-900/60 rounded-xl p-4 border border-zinc-800">
+                  <p className="text-sm leading-relaxed opacity-90">{insight}</p>
+                </div>
+              )}
+
+              {proposals.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest">あなたの人生データへの提案</p>
+                  {proposals.map((p, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: p.applied || p.skipped ? 0.3 : 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="border border-zinc-800 rounded-xl p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">{proposalLabel(p)}</p>
+                          <p className="text-sm leading-relaxed opacity-90 mb-1">{p.value}</p>
+                          <p className="text-xs text-zinc-600">{p.reason}</p>
+                        </div>
+                        {!p.applied && !p.skipped && (
+                          <div className="flex gap-2 shrink-0 pt-1">
+                            <button
+                              onClick={() => applyProposal(i)}
+                              className="px-3 py-1.5 bg-zinc-100 text-zinc-950 text-xs rounded-lg hover:bg-white transition-colors font-medium"
+                            >
+                              追加
+                            </button>
+                            <button
+                              onClick={() => skipProposal(i)}
+                              className="px-3 py-1.5 border border-zinc-800 text-xs rounded-lg hover:bg-zinc-900 transition-colors opacity-50 hover:opacity-100"
+                            >
+                              スキップ
+                            </button>
+                          </div>
+                        )}
+                        {p.applied && <span className="text-[10px] text-zinc-500 shrink-0 pt-1">✓ 追加済み</span>}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={handleReset}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest"
+              >
+                ← 別のテーマで話す
+              </button>
             </div>
           )}
         </motion.div>

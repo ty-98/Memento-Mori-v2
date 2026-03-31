@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Brain } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListModal } from './components/BucketListModal';
 import { AdvisorModal } from './components/AdvisorModal';
@@ -837,7 +837,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
             title="Life Advisor"
           >
-            <Brain size={18} className="md:w-5 md:h-5" />
+            <Compass size={18} className="md:w-5 md:h-5" />
           </button>
           <button
             onClick={() => setIsBucketListOpen(true)}
@@ -987,6 +987,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
         isOpen={isAdvisorOpen}
         onClose={() => setIsAdvisorOpen(false)}
         userData={userData}
+        onUpdateUserData={onUpdateUserData}
       />
     </div>
   );
