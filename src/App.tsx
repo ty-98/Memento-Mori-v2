@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Brain } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListModal } from './components/BucketListModal';
+import { AdvisorModal } from './components/AdvisorModal';
 import { StoicQuotes } from './components/StoicQuotes';
 import { TimeAllocation } from './components/TimeAllocation';
 
@@ -696,6 +697,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isBucketListOpen, setIsBucketListOpen] = useState(false);
+  const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleShare = async () => {
@@ -830,6 +832,13 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           >
             <Calendar size={18} className="md:w-5 md:h-5" />
           </button> */}
+          <button
+            onClick={() => setIsAdvisorOpen(true)}
+            className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
+            title="Life Advisor"
+          >
+            <Brain size={18} className="md:w-5 md:h-5" />
+          </button>
           <button
             onClick={() => setIsBucketListOpen(true)}
             className="p-2 md:p-3 opacity-60 hover:opacity-100 transition-opacity rounded-full hover:bg-black/10"
@@ -973,6 +982,11 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
         items={userData.bucketList ?? []}
         textColor={userData.textColor}
         onChange={(items) => onUpdateUserData({ bucketList: items })}
+      />
+      <AdvisorModal
+        isOpen={isAdvisorOpen}
+        onClose={() => setIsAdvisorOpen(false)}
+        userData={userData}
       />
     </div>
   );
