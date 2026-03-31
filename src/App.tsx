@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, Target, BookOpen } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, Target } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListModal } from './components/BucketListModal';
 import { AdvisorModal } from './components/AdvisorModal';
@@ -694,7 +694,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
   const [progress, setProgress] = useState({ elapsed: 0, remaining: 100 });
   const [deathDate, setDeathDate] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'goals' | 'wisdom'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'goals'>('home');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isBucketListOpen, setIsBucketListOpen] = useState(false);
@@ -804,13 +804,12 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
     { tab: 'home', icon: Home, label: 'HOME' },
     { tab: 'life', icon: Heart, label: 'LIFE' },
     { tab: 'goals', icon: Target, label: 'GOALS' },
-    { tab: 'wisdom', icon: BookOpen, label: 'WISDOM' },
   ] as const;
 
   return (
     <div
       ref={shareRef}
-      className="h-screen flex flex-col font-sans selection:bg-zinc-800 transition-colors duration-500 overflow-hidden"
+      className="h-[100dvh] flex flex-col font-sans selection:bg-zinc-800 transition-colors duration-500 overflow-hidden"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
     >
       {/* ── ヘッダー ── */}
@@ -896,6 +895,10 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
                   <div className="h-full" style={{ width: `${progress.remaining}%`, backgroundColor: 'currentColor', opacity: 0.9, boxShadow: '0 0 10px currentColor' }} />
                 </div>
               </div>
+
+              <div className="mt-8 w-full max-w-2xl">
+                <StoicQuotes textColor={userData.textColor} />
+              </div>
             </motion.div>
           </div>
         )}
@@ -944,17 +947,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           </motion.div>
         )}
 
-        {/* WISDOM */}
-        {activeTab === 'wisdom' && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="h-full flex items-center justify-center px-4 py-8"
-          >
-            <StoicQuotes textColor={userData.textColor} />
-          </motion.div>
-        )}
+
       </div>
 
       {/* ── ボトムナビゲーション ── */}
