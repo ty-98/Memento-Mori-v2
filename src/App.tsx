@@ -852,7 +852,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
         {/* HOME */}
         {activeTab === 'home' && (
-          <div className="h-full flex flex-col items-center justify-center px-4 py-4">
+          <div className="min-h-full flex flex-col items-center justify-center px-4 py-6">
             <div className="w-full max-w-4xl flex flex-col items-center">
               <InlineEdit
                 value={userData.quote}
