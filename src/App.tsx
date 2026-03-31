@@ -853,12 +853,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
         {/* HOME */}
         {activeTab === 'home' && (
           <div className="h-full flex flex-col items-center justify-center px-4 py-4">
-            <motion.div
-              initial={{ opacity: 0, filter: 'blur(10px)' }}
-              animate={{ opacity: 1, filter: 'blur(0px)' }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="w-full max-w-4xl flex flex-col items-center"
-            >
+            <div className="w-full max-w-4xl flex flex-col items-center">
               <InlineEdit
                 value={userData.quote}
                 onSave={(val) => onUpdateUserData({ quote: val })}
@@ -902,7 +897,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
               <div className="w-full max-w-3xl mt-4">
                 <TimeAllocation birthDate={userData.birthDate} expectedLifespan={userData.expectedLifespan} textColor={userData.textColor} />
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
 

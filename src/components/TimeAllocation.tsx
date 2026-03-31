@@ -24,12 +24,7 @@ export function TimeAllocation({ birthDate, expectedLifespan, textColor }: { bir
   if (remainingYears <= 0) return null;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay: 0.6, duration: 1 }}
-      className="w-full max-w-3xl px-4"
-    >
+    <div className="w-full max-w-3xl px-4">
       <h3 className="text-[10px] tracking-[0.3em] uppercase mb-6 text-center font-medium opacity-50">
         Estimated Time Allocation ({remainingYears.toFixed(1)} years left)
       </h3>
@@ -58,7 +53,7 @@ export function TimeAllocation({ birthDate, expectedLifespan, textColor }: { bir
           isHighlighted 
         />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
