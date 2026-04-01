@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Compass, Sparkles, Loader2 } from 'lucide-react';
+import { Compass, Sparkles, Loader2, ListChecks, Heart, Home, Quote } from 'lucide-react';
 import { BucketItem, UserData } from '../App';
 
 type Step = 'topic' | 'questioning' | 'answering' | 'analyzing' | 'proposals';
@@ -200,12 +200,12 @@ type の説明:
     setProposals(prev => prev.map((item, i) => i === index ? { ...item, skipped: true } : item));
   };
 
-  const proposalLabel = (p: Proposal) => {
-    if (p.type === 'bucketList') return 'Bucket List';
-    if (p.type === 'decadeGoal') return `${p.decade}代の目標`;
-    if (p.type === 'notes') return 'Important Things';
-    if (p.type === 'quote') return '座右の銘';
-    return '';
+  const proposalMeta = (p: Proposal): { icon: React.ReactNode; label: string; tab: string; buttonLabel: string } => {
+    if (p.type === 'bucketList') return { icon: <ListChecks size={11} />, label: 'Bucket List', tab: 'BUCKET', buttonLabel: 'BUCKETに追加' };
+    if (p.type === 'decadeGoal') return { icon: <Home size={11} />, label: `${p.decade}代の目標`, tab: 'HOME', buttonLabel: `${p.decade}代の目標に設定` };
+    if (p.type === 'notes') return { icon: <Heart size={11} />, label: 'Important Things', tab: 'LIFE', buttonLabel: 'LIFEに追加' };
+    if (p.type === 'quote') return { icon: <Quote size={11} />, label: '座右の銘', tab: 'HOME', buttonLabel: '座右の銘に設定' };
+    return { icon: null, label: '', tab: '', buttonLabel: '追加' };
   };
 
   const handleReset = () => {
@@ -316,34 +316,40 @@ type の説明:
           {proposals.length > 0 && (
             <div className="space-y-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest">あなたの人生データへの提案</p>
-              {proposals.map((p, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: p.applied || p.skipped ? 0.3 : 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="border border-zinc-800 rounded-xl p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">{proposalLabel(p)}</p>
-                      <p className="text-sm leading-relaxed opacity-90 mb-1">{p.value}</p>
-                      <p className="text-xs text-zinc-600">{p.reason}</p>
+              {proposals.map((p, i) => {
+                const meta = proposalMeta(p);
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: p.applied || p.skipped ? 0.3 : 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="border border-zinc-800 rounded-xl overflow-hidden"
+                  >
+                    {/* 行先バッジ */}
+                    <div className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900/60 border-b border-zinc-800">
+                      <span className="text-zinc-400">{meta.icon}</span>
+                      <span className="text-[10px] text-zinc-400 tracking-wider uppercase">{meta.label}</span>
+                      <span className="text-[10px] text-zinc-600 ml-1">→ {meta.tab}タブ</span>
                     </div>
-                    {!p.applied && !p.skipped && (
-                      <div className="flex gap-2 shrink-0 pt-1">
-                        <button onClick={() => applyProposal(i)} className="px-3 py-1.5 bg-zinc-100 text-zinc-950 text-xs rounded-lg hover:bg-white transition-colors font-medium">
-                          追加
-                        </button>
-                        <button onClick={() => skipProposal(i)} className="px-3 py-1.5 border border-zinc-800 text-xs rounded-lg hover:bg-zinc-900 transition-colors opacity-50 hover:opacity-100">
-                          スキップ
-                        </button>
-                      </div>
-                    )}
-                    {p.applied && <span className="text-[10px] text-zinc-500 shrink-0 pt-1">✓ 追加済み</span>}
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="p-4">
+                      <p className="text-sm leading-relaxed opacity-90 mb-1">{p.value}</p>
+                      <p className="text-xs text-zinc-600 mb-3">{p.reason}</p>
+                      {!p.applied && !p.skipped && (
+                        <div className="flex gap-2">
+                          <button onClick={() => applyProposal(i)} className="px-3 py-1.5 bg-zinc-100 text-zinc-950 text-xs rounded-lg hover:bg-white transition-colors font-medium">
+                            {meta.buttonLabel}
+                          </button>
+                          <button onClick={() => skipProposal(i)} className="px-3 py-1.5 border border-zinc-800 text-xs rounded-lg hover:bg-zinc-900 transition-colors opacity-50 hover:opacity-100">
+                            スキップ
+                          </button>
+                        </div>
+                      )}
+                      {p.applied && <span className="text-[10px] text-zinc-500">✓ 追加済み</span>}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
           <button onClick={handleReset} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest">
