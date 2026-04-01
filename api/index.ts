@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 import { kv } from "@vercel/kv";
 import Database from "better-sqlite3";
 
@@ -44,8 +44,8 @@ if (!USE_KV) {
 }
 
 // Initialize Gemini AI client
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const genai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
 const hashPassword = (password: string) => {
   return crypto.createHash("sha256").update(password).digest("hex");
@@ -276,10 +276,10 @@ app.delete("/api/user/:id", async (req, res) => {
   }
 });
 
-// Gemini API proxy endpoint
+// Groq API proxy endpoint
 app.post("/api/gemini", async (req, res) => {
-  if (!genai) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is not configured in .env" });
+  if (!groq) {
+    return res.status(500).json({ error: "GROQ_API_KEY is not configured in .env" });
   }
 
   const { prompt } = req.body;
@@ -288,15 +288,15 @@ app.post("/api/gemini", async (req, res) => {
   }
 
   try {
-    const response = await genai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
     });
-    const text = response.text ?? "";
+    const text = response.choices[0]?.message?.content ?? "";
     res.json({ text });
   } catch (err: any) {
-    console.error("Gemini API error:", err.message);
-    res.status(500).json({ error: err.message || "Gemini API request failed" });
+    console.error("Groq API error:", err.message);
+    res.status(500).json({ error: err.message || "Groq API request failed" });
   }
 });
 
