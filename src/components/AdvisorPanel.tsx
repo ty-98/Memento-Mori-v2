@@ -19,7 +19,7 @@ interface AdvisorPanelProps {
   onUpdateUserData: (data: Partial<UserData>) => void;
 }
 
-const SESSION_LIMIT = 3;
+const SESSION_LIMIT = 5;
 const STORAGE_KEY = 'advisor_sessions';
 
 function getTodayKey() {

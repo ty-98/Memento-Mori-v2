@@ -78,7 +78,7 @@ export function BucketListPanel({ items, onChange }: BucketListPanelProps) {
                 </span>
                 <button
                   onClick={() => handleDelete(item.id)}
-                  className="opacity-0 group-hover:opacity-50 hover:!opacity-100 hover:text-red-400 transition-all shrink-0"
+                  className="opacity-30 hover:opacity-100 hover:text-red-400 transition-all shrink-0"
                 >
                   <Trash2 size={15} />
                 </button>
