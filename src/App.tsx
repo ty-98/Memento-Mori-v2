@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListPanel } from './components/BucketListPanel';
 import { AdvisorPanel } from './components/AdvisorPanel';
 import { StoicQuotes } from './components/StoicQuotes';
 import { TimeAllocation } from './components/TimeAllocation';
+import { MemoSheet, Memo } from './components/MemoSheet';
 
 export interface BucketItem {
   id: string;
@@ -27,6 +28,7 @@ export interface UserData {
   decadeGoals?: Record<string, string>;
   avatar?: string | null;
   bucketList?: BucketItem[];
+  memos?: Memo[];
 }
 
 interface TimeLeft {
@@ -81,6 +83,19 @@ const sanitizeUserData = (data: any): UserData => {
       .filter((item: any) => item.text.length > 0);
   };
 
+  const sanitizeMemos = (items: any): Memo[] => {
+    if (!Array.isArray(items)) return [];
+    return items
+      .filter((item: any) => item && typeof item === 'object')
+      .slice(0, 500)
+      .map((item: any) => ({
+        id: typeof item.id === 'string' ? item.id.slice(0, 36) : crypto.randomUUID(),
+        text: typeof item.text === 'string' ? item.text.slice(0, 1000) : '',
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt.slice(0, 30) : new Date().toISOString(),
+      }))
+      .filter((item: any) => item.text.length > 0);
+  };
+
   return {
     id: data.id,
     username: data.username,
@@ -94,6 +109,7 @@ const sanitizeUserData = (data: any): UserData => {
     decadeGoals: sanitizeDecadeGoals(data.decadeGoals || data.dg),
     avatar: typeof data.avatar === 'string' ? data.avatar : null,
     bucketList: sanitizeBucketList(data.bucketList),
+    memos: sanitizeMemos(data.memos),
   };
 };
 
@@ -697,7 +713,17 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [activeTab, setActiveTab] = useState<'home' | 'life' | 'bucket' | 'advisor'>('home');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
+  const [isMemoOpen, setIsMemoOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
+
+  const handleAddMemo = (text: string) => {
+    const newMemo: Memo = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
+    onUpdateUserData({ memos: [...(userData.memos ?? []), newMemo] });
+  };
+
+  const handleDeleteMemo = (id: string) => {
+    onUpdateUserData({ memos: (userData.memos ?? []).filter(m => m.id !== id) });
+  };
 
   const handleShare = async () => {
     try {
@@ -979,6 +1005,38 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
             </button>
           ))}
         </div>
+      )}
+
+      {/* メモフローティングボタン */}
+      {!isSharing && (
+        <button
+          onClick={() => setIsMemoOpen(true)}
+          className="fixed bottom-20 right-4 z-40 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 active:scale-95"
+          style={{ backgroundColor: userData.textColor || '#fafafa', color: userData.bgColor || '#050505' }}
+          aria-label="メモを開く"
+        >
+          <NotebookPen size={16} />
+          {(userData.memos?.length ?? 0) > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center"
+              style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa', border: `1px solid ${userData.textColor || '#fafafa'}` }}
+            >
+              {Math.min(userData.memos!.length, 99)}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* メモシート */}
+      {isMemoOpen && (
+        <MemoSheet
+          memos={userData.memos ?? []}
+          onAdd={handleAddMemo}
+          onDelete={handleDeleteMemo}
+          onClose={() => setIsMemoOpen(false)}
+          bgColor={userData.bgColor}
+          textColor={userData.textColor}
+        />
       )}
 
       {/* モーダル */}
