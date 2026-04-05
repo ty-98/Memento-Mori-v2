@@ -29,6 +29,7 @@ export interface UserData {
   avatar?: string | null;
   bucketList?: BucketItem[];
   memos?: Memo[];
+  favorites?: string[];
 }
 
 interface TimeLeft {
@@ -110,6 +111,9 @@ const sanitizeUserData = (data: any): UserData => {
     avatar: typeof data.avatar === 'string' ? data.avatar : null,
     bucketList: sanitizeBucketList(data.bucketList),
     memos: sanitizeMemos(data.memos),
+    favorites: Array.isArray(data.favorites)
+      ? data.favorites.filter((t: any) => typeof t === 'string' && t.length > 0).slice(0, 100).map((t: string) => t.slice(0, 50))
+      : [],
   };
 };
 
@@ -951,6 +955,12 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
                 />
               </div>
             </div>
+
+            <FavoritesSection
+              favorites={userData.favorites ?? []}
+              onChange={(favs) => onUpdateUserData({ favorites: favs })}
+              textColor={userData.textColor}
+            />
           </motion.div>
         )}
 
@@ -1041,6 +1051,60 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       {/* モーダル */}
       <ReflectModal isOpen={isReflectModalOpen} onClose={() => setIsReflectModalOpen(false)} userData={userData} />
+    </div>
+  );
+}
+
+function FavoritesSection({ favorites, onChange, textColor }: { favorites: string[], onChange: (favs: string[]) => void, textColor?: string }) {
+  const [input, setInput] = useState('');
+
+  const add = () => {
+    const tag = input.trim();
+    if (!tag || favorites.includes(tag)) { setInput(''); return; }
+    onChange([...favorites, tag]);
+    setInput('');
+  };
+
+  const remove = (tag: string) => onChange(favorites.filter(t => t !== tag));
+
+  return (
+    <div>
+      <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Favorites</h3>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {favorites.map(tag => (
+          <span
+            key={tag}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-current/20 opacity-80 hover:opacity-100 group transition-opacity cursor-default"
+          >
+            {tag}
+            <button
+              onClick={() => remove(tag)}
+              className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity leading-none -mr-0.5"
+              aria-label={`${tag}を削除`}
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          placeholder="コーヒー、登山、SF小説..."
+          maxLength={50}
+          className="flex-1 bg-transparent text-sm outline-none border-b border-current/20 pb-1 placeholder:opacity-25 focus:border-current/50 transition-colors"
+        />
+        <button
+          onClick={add}
+          disabled={!input.trim()}
+          className="text-xs opacity-40 hover:opacity-80 disabled:opacity-20 transition-opacity pb-1"
+        >
+          追加
+        </button>
+      </div>
     </div>
   );
 }
