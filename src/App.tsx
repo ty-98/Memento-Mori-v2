@@ -1092,7 +1092,7 @@ function FavoritesSection({ favorites, onChange, textColor }: { favorites: strin
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }}
           placeholder="コーヒー、登山、SF小説..."
           maxLength={50}
           className="flex-1 bg-transparent text-sm outline-none border-b border-current/20 pb-1 placeholder:opacity-25 focus:border-current/50 transition-colors"
