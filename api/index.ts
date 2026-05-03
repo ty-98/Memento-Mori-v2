@@ -47,18 +47,63 @@ if (!USE_KV) {
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const groq = GROQ_API_KEY ? new Groq({ apiKey: GROQ_API_KEY }) : null;
 
-const hashPassword = (password: string) => {
-  return crypto.createHash("sha256").update(password).digest("hex");
+// scrypt with random salt. Format: "<hex-salt>:<hex-hash>"
+const hashPassword = (password: string): string => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
 };
+
+// Supports both legacy SHA-256 (no colon) and current scrypt format
+const verifyPassword = (password: string, stored: string): boolean => {
+  if (!stored.includes(':')) {
+    return crypto.createHash("sha256").update(password).digest("hex") === stored;
+  }
+  const colonIdx = stored.indexOf(':');
+  const salt = stored.slice(0, colonIdx);
+  const storedHash = stored.slice(colonIdx + 1);
+  try {
+    const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(derivedKey, 'hex'), Buffer.from(storedHash, 'hex'));
+  } catch {
+    return false;
+  }
+};
+
+// In-memory rate limiter: 10 attempts per 15 min per key
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const checkRateLimit = (key: string): boolean => {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (!record || record.resetAt < now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return false;
+  }
+  if (record.count >= 10) return true;
+  record.count++;
+  return false;
+};
+
+const isValidUsername = (u: string): boolean => /^[a-zA-Z0-9_-]{3,50}$/.test(u);
 
 const app = express();
 app.use(express.json());
 
 // API Routes
 app.post("/api/auth/register", async (req, res) => {
-  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList } = req.body;
-  if (!username || !password) {
+  const { username, password, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender } = req.body;
+  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+  if (!trimmedUsername || !password) {
     return res.status(400).json({ error: "Username and password are required" });
+  }
+  if (!isValidUsername(trimmedUsername)) {
+    return res.status(400).json({ error: "ユーザーIDは3〜50文字の英数字・アンダースコア・ハイフンのみ使用できます" });
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({ error: "パスワードは8文字以上にしてください" });
+  }
+  if (avatar && typeof avatar === 'string' && avatar.length > 400000) {
+    return res.status(400).json({ error: "アバター画像が大きすぎます" });
   }
 
   const id = crypto.randomUUID();
@@ -66,7 +111,7 @@ app.post("/api/auth/register", async (req, res) => {
 
   const newUserData = {
     id,
-    username,
+    username: trimmedUsername,
     name: name || "Anonymous",
     birthDate: birthDate || "1990-01-01",
     expectedLifespan: expectedLifespan || 80,
@@ -76,30 +121,30 @@ app.post("/api/auth/register", async (req, res) => {
     textColor: textColor || "#fafafa",
     decadeGoals: decadeGoals || {},
     avatar: avatar || null,
-    bucketList: bucketList || []
+    bucketList: bucketList || [],
+    gender: gender || null,
   };
 
   try {
     if (USE_KV) {
-      // Check if user exists
-      const existingUser = await kv.get(`user:creds:${username}`);
+      const existingUser = await kv.get(`user:creds:${trimmedUsername}`);
       if (existingUser) {
-        return res.status(409).json({ error: "Username already exists" });
+        return res.status(409).json({ error: "このユーザーIDは既に使用されています。ログインをお試しください。" });
       }
-      await kv.set(`user:creds:${username}`, { password_hash, id });
+      await kv.set(`user:creds:${trimmedUsername}`, { password_hash, id });
       await kv.set(`user:profile:${id}`, newUserData);
     } else {
       const stmt = db.prepare(
         "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar, bucket_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       stmt.run(
-        id, username, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar, JSON.stringify(newUserData.bucketList)
+        id, trimmedUsername, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar, JSON.stringify(newUserData.bucketList)
       );
     }
     res.json(newUserData);
   } catch (err: any) {
     if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      return res.status(409).json({ error: "Username already exists" });
+      return res.status(409).json({ error: "このユーザーIDは既に使用されています。ログインをお試しください。" });
     }
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -108,25 +153,34 @@ app.post("/api/auth/register", async (req, res) => {
 
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) {
+  const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+  if (!trimmedUsername || !password) {
     return res.status(400).json({ error: "Username and password are required" });
   }
-
-  const password_hash = hashPassword(password);
+  if (checkRateLimit(`login:${trimmedUsername}`)) {
+    return res.status(429).json({ error: "ログイン試行回数が多すぎます。15分後に再試行してください。" });
+  }
 
   try {
     if (USE_KV) {
-      const creds: any = await kv.get(`user:creds:${username}`);
-      if (!creds || creds.password_hash !== password_hash) {
+      const creds: any = await kv.get(`user:creds:${trimmedUsername}`);
+      if (!creds || !verifyPassword(password, creds.password_hash)) {
         return res.status(401).json({ error: "Invalid credentials" });
+      }
+      // Migrate legacy SHA-256 to scrypt on successful login
+      if (!creds.password_hash.includes(':')) {
+        await kv.set(`user:creds:${trimmedUsername}`, { ...creds, password_hash: hashPassword(password) });
       }
       const profile = await kv.get(`user:profile:${creds.id}`);
       return res.json(profile);
     } else {
-      const stmt = db.prepare("SELECT * FROM users WHERE username = ? AND password_hash = ?");
-      const user = stmt.get(username, password_hash) as any;
-      if (!user) {
+      const user = db.prepare("SELECT * FROM users WHERE username = ?").get(trimmedUsername) as any;
+      if (!user || !verifyPassword(password, user.password_hash)) {
         return res.status(401).json({ error: "Invalid credentials" });
+      }
+      // Migrate legacy SHA-256 to scrypt on successful login
+      if (!user.password_hash.includes(':')) {
+        db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(password), user.id);
       }
       return res.json({
         id: user.id,
@@ -140,7 +194,8 @@ app.post("/api/auth/login", async (req, res) => {
         textColor: user.text_color,
         decadeGoals: user.decade_goals ? JSON.parse(user.decade_goals) : {},
         avatar: user.avatar,
-        bucketList: user.bucket_list ? JSON.parse(user.bucket_list) : []
+        bucketList: user.bucket_list ? JSON.parse(user.bucket_list) : [],
+        gender: user.gender || null,
       });
     }
   } catch (err) {
@@ -187,8 +242,6 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const current_password_hash = hashPassword(currentPassword);
-  
   try {
     if (USE_KV) {
       const existingProfile: any = await kv.get(`user:profile:${id}`);
@@ -196,8 +249,8 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
 
       const oldUsername = existingProfile.username;
       const creds: any = await kv.get(`user:creds:${oldUsername}`);
-      
-      if (!creds || creds.password_hash !== current_password_hash) {
+
+      if (!creds || !verifyPassword(currentPassword, creds.password_hash)) {
         return res.status(401).json({ error: "Invalid current password" });
       }
 
@@ -206,12 +259,19 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
 
       if (newPassword) {
         updatedCreds.password_hash = hashPassword(newPassword);
+      } else if (!creds.password_hash.includes(':')) {
+        // Migrate legacy SHA-256 to scrypt
+        updatedCreds.password_hash = hashPassword(currentPassword);
       }
 
       if (newUsername && newUsername !== oldUsername) {
-        const usernameExists = await kv.get(`user:creds:${newUsername}`);
-        if (usernameExists) return res.status(409).json({ error: "Username already exists" });
-        newName = newUsername;
+        const trimmedNew = newUsername.trim();
+        if (!isValidUsername(trimmedNew)) {
+          return res.status(400).json({ error: "ユーザーIDは3〜50文字の英数字・アンダースコア・ハイフンのみ使用できます" });
+        }
+        const usernameExists = await kv.get(`user:creds:${trimmedNew}`);
+        if (usernameExists) return res.status(409).json({ error: "このユーザーIDは既に使用されています。ログインをお試しください。" });
+        newName = trimmedNew;
       }
 
       if (newUsername && newUsername !== oldUsername) {
@@ -219,24 +279,32 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
         await kv.set(`user:creds:${newName}`, updatedCreds);
         const updatedProfile = { ...existingProfile, username: newName };
         await kv.set(`user:profile:${id}`, updatedProfile);
-      } else if (newPassword) {
+      } else {
         await kv.set(`user:creds:${newName}`, updatedCreds);
       }
 
       return res.json({ success: true, username: newName });
     } else {
-      const user = db.prepare("SELECT * FROM users WHERE id = ? AND password_hash = ?").get(id, current_password_hash) as any;
-      if (!user) return res.status(401).json({ error: "Invalid current password" });
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      if (!user || !verifyPassword(currentPassword, user.password_hash)) {
+        return res.status(401).json({ error: "Invalid current password" });
+      }
 
       let newName = user.username;
-      let newHash = current_password_hash;
+      let newHash = user.password_hash;
 
       if (newPassword) {
         newHash = hashPassword(newPassword);
+      } else if (!user.password_hash.includes(':')) {
+        newHash = hashPassword(currentPassword);
       }
-      
+
       if (newUsername && newUsername !== user.username) {
-        newName = newUsername;
+        const trimmedNew = newUsername.trim();
+        if (!isValidUsername(trimmedNew)) {
+          return res.status(400).json({ error: "ユーザーIDは3〜50文字の英数字・アンダースコア・ハイフンのみ使用できます" });
+        }
+        newName = trimmedNew;
       }
 
       const stmt = db.prepare("UPDATE users SET username = ?, password_hash = ? WHERE id = ?");
@@ -245,7 +313,7 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
     }
   } catch (err: any) {
     if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
-      return res.status(409).json({ error: "Username already exists" });
+      return res.status(409).json({ error: "このユーザーIDは既に使用されています。ログインをお試しください。" });
     }
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -255,19 +323,34 @@ app.put("/api/auth/:id/credentials", async (req, res) => {
 // Delete user account endpoint
 app.delete("/api/user/:id", async (req, res) => {
   const { id } = req.params;
-  
+  const { password } = req.body || {};
+
+  if (!password) {
+    return res.status(400).json({ error: "パスワードが必要です" });
+  }
+
   try {
     if (USE_KV) {
       const profile: any = await kv.get(`user:profile:${id}`);
       if (!profile) return res.status(404).json({ error: "User not found" });
-      
-      const username = profile.username;
-      await kv.del(`user:creds:${username}`);
+
+      const creds: any = await kv.get(`user:creds:${profile.username}`);
+      if (!creds || !verifyPassword(password, creds.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+
+      await kv.del(`user:creds:${profile.username}`);
       await kv.del(`user:profile:${id}`);
       return res.json({ success: true });
     } else {
-      const info = db.prepare("DELETE FROM users WHERE id = ?").run(id);
-      if (info.changes === 0) return res.status(404).json({ error: "User not found" });
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      if (!verifyPassword(password, user.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+
+      db.prepare("DELETE FROM users WHERE id = ?").run(id);
       return res.json({ success: true });
     }
   } catch (err) {
