@@ -40,7 +40,9 @@ if (!USE_KV) {
     "ALTER TABLE users ADD COLUMN gender TEXT",
     "ALTER TABLE users ADD COLUMN share_token TEXT UNIQUE",
     "ALTER TABLE users ADD COLUMN memos TEXT DEFAULT '[]'",
-    "ALTER TABLE users ADD COLUMN favorites TEXT DEFAULT '[]'"
+    "ALTER TABLE users ADD COLUMN favorites TEXT DEFAULT '[]'",
+    "ALTER TABLE users ADD COLUMN purpose TEXT",
+    "ALTER TABLE users ADD COLUMN capital_scores TEXT"
   ];
   for (const query of migrations) {
     try { db.exec(query); } catch (e) {}
@@ -264,6 +266,8 @@ app.post("/api/auth/login", async (req, res) => {
         memos: user.memos ? JSON.parse(user.memos) : [],
         favorites: user.favorites ? JSON.parse(user.favorites) : [],
         shareToken: user.share_token || null,
+        purpose: user.purpose || '',
+        capitalScores: user.capital_scores ? JSON.parse(user.capital_scores) : null,
       });
     }
   } catch (err) {
@@ -274,7 +278,7 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/user/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites } = req.body;
+  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites, purpose, capitalScores } = req.body;
 
   try {
     if (USE_KV) {
@@ -282,14 +286,14 @@ app.post("/api/user/:id", async (req, res) => {
       if (!existingProfile) {
         return res.status(404).json({ error: "User not found" });
       }
-      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites };
+      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites, purpose, capitalScores };
       await kv.set(`user:profile:${id}`, updatedData);
       return res.json({ success: true });
     } else {
       const stmt = db.prepare(
-        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ?, bucket_list = ?, gender = ?, memos = ?, favorites = ? WHERE id = ?"
+        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ?, bucket_list = ?, gender = ?, memos = ?, favorites = ?, purpose = ?, capital_scores = ? WHERE id = ?"
       );
-      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, bucketList ? JSON.stringify(bucketList) : null, gender || null, memos ? JSON.stringify(memos) : '[]', favorites ? JSON.stringify(favorites) : '[]', id);
+      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, bucketList ? JSON.stringify(bucketList) : null, gender || null, memos ? JSON.stringify(memos) : '[]', favorites ? JSON.stringify(favorites) : '[]', purpose || null, capitalScores ? JSON.stringify(capitalScores) : null, id);
       if (info.changes === 0) {
         return res.status(404).json({ error: "User not found" });
       }
