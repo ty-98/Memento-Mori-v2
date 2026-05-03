@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen, Bot, Sparkles } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen, Bot, Sparkles, Flame } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListPanel } from './components/BucketListPanel';
 import { AdvisorPanel } from './components/AdvisorPanel';
 import { StoicQuotes } from './components/StoicQuotes';
 import { TimeAllocation } from './components/TimeAllocation';
 import { MemoSheet, Memo } from './components/MemoSheet';
+import { PurposePanel } from './components/PurposePanel';
 
 export interface BucketItem {
   id: string;
@@ -32,6 +33,8 @@ export interface UserData {
   memos?: Memo[];
   favorites?: string[];
   shareToken?: string | null;
+  purpose?: string;
+  capitalScores?: { human: number; social: number; financial: number } | null;
 }
 
 interface TimeLeft {
@@ -118,6 +121,14 @@ const sanitizeUserData = (data: any): UserData => {
       ? data.favorites.filter((t: any) => typeof t === 'string' && t.length > 0).slice(0, 100).map((t: string) => t.slice(0, 50))
       : [],
     shareToken: typeof data.shareToken === 'string' ? data.shareToken : (typeof data.share_token === 'string' ? data.share_token : null),
+    purpose: typeof data.purpose === 'string' ? data.purpose.slice(0, 2000) : '',
+    capitalScores: data.capitalScores && typeof data.capitalScores === 'object' && !Array.isArray(data.capitalScores)
+      ? {
+          human: Math.min(5, Math.max(1, Number(data.capitalScores.human) || 3)),
+          social: Math.min(5, Math.max(1, Number(data.capitalScores.social) || 3)),
+          financial: Math.min(5, Math.max(1, Number(data.capitalScores.financial) || 3)),
+        }
+      : null,
   };
 };
 
@@ -878,7 +889,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 });
   const [progress, setProgress] = useState({ elapsed: 0, remaining: 100 });
   const [deathDate, setDeathDate] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'bucket' | 'advisor'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'life' | 'bucket' | 'advisor' | 'purpose'>('home');
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isMemoOpen, setIsMemoOpen] = useState(false);
@@ -1059,6 +1070,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
     { tab: 'life', icon: Heart, label: 'LIFE' },
     { tab: 'bucket', icon: ListChecks, label: 'BUCKET' },
     { tab: 'advisor', icon: Compass, label: 'ADVISOR' },
+    { tab: 'purpose', icon: Flame, label: 'PURPOSE' },
   ] as const;
 
   return (
@@ -1231,6 +1243,18 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
           </motion.div>
         )}
 
+        {/* PURPOSE */}
+        {activeTab === 'purpose' && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="max-w-3xl mx-auto px-4 py-8"
+          >
+            <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Life Purpose</h3>
+            <PurposePanel userData={userData} onUpdateUserData={onUpdateUserData} />
+          </motion.div>
+        )}
 
       </div>
 
