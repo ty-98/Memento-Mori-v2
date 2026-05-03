@@ -21,6 +21,7 @@ export interface UserData {
   name: string;
   birthDate: string;
   expectedLifespan: number;
+  gender?: 'male' | 'female' | null;
   quote: string;
   notes?: string;
   bgColor?: string;
@@ -103,6 +104,7 @@ const sanitizeUserData = (data: any): UserData => {
     name: sanitizeString(data.name || data.n, 100, 'Anonymous'),
     birthDate: sanitizeString(data.birthDate || data.b, 20, '1990-01-01'),
     expectedLifespan: typeof (data.expectedLifespan || data.l) === 'number' ? (data.expectedLifespan || data.l) : 80,
+    gender: data.gender === 'male' || data.gender === 'female' ? data.gender : null,
     quote: sanitizeString(data.quote || data.q, 200, 'Memento Mori'),
     notes: sanitizeString(data.notes || data.m, 10000, ''),
     bgColor: sanitizeColor(data.bgColor || data.bg, '#050505'),
@@ -186,11 +188,21 @@ export default function App() {
   const handleDeleteAccount = async () => {
     if (userData?.id) {
       if (!window.confirm('本当にアカウントを削除しますか？この操作は取り消せません。')) return;
+      const password = window.prompt('確認のため、パスワードを入力してください：');
+      if (!password) return;
       try {
-        await fetch(`/api/user/${userData.id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/user/${userData.id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || '削除に失敗しました。');
+        }
         handleLogout();
-      } catch (err) {
-        alert('削除に失敗しました。');
+      } catch (err: any) {
+        alert(err.message || '削除に失敗しました。');
       }
     }
   };
@@ -259,7 +271,7 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void, onLogin: (da
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username: username.trim(), password })
       });
       if (!res.ok) {
         throw new Error('ログインに失敗しました。ユーザーIDとパスワードを確認してください。');
@@ -351,6 +363,8 @@ function WelcomeScreen({ onStart, onLogin }: { onStart: () => void, onLogin: (da
   );
 }
 
+const GENDER_LIFESPAN: Record<string, number> = { male: 81, female: 87 };
+
 function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCredentials, onCancel }: { initialData: UserData | null, onSave: (data: UserData, credentials?: { username?: string; password?: string }) => void, onLogout: () => void, onDeleteAccount?: () => void, onUpdateCredentials?: (creds: any) => void, onCancel?: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -366,6 +380,7 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
   const [month, setMonth] = useState((defaultDate.getMonth() + 1).toString());
   const [day, setDay] = useState(defaultDate.getDate().toString());
   const [expectedLifespan, setExpectedLifespan] = useState(initialData?.expectedLifespan?.toString() || '80');
+  const [gender, setGender] = useState<'male' | 'female' | ''>(initialData?.gender || '');
 
   const [showSecurity, setShowSecurity] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -417,7 +432,7 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals, avatar }, isNew ? { username, password } : undefined);
+    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), gender: gender || null, quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals, avatar }, isNew ? { username: username.trim(), password } : undefined);
   };
 
   const handleUpdateCreds = (e: React.FormEvent) => {
@@ -560,6 +575,38 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
               </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">性別（想定寿命のデフォルト値に使用）</label>
+            <div className="flex gap-3">
+              {(['male', 'female'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => {
+                    setGender(g);
+                    setExpectedLifespan(GENDER_LIFESPAN[g].toString());
+                  }}
+                  className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                    gender === g
+                      ? 'border-zinc-400 bg-zinc-800 text-zinc-100'
+                      : 'border-zinc-800 bg-[#050505] text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
+                  }`}
+                >
+                  {g === 'male' ? '男性 (81歳)' : '女性 (87歳)'}
+                </button>
+              ))}
+              {gender && (
+                <button
+                  type="button"
+                  onClick={() => setGender('')}
+                  className="px-3 py-2.5 rounded-lg border border-zinc-800 bg-[#050505] text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                  title="クリア"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           </div>
           <div>
