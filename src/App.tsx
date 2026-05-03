@@ -31,6 +31,7 @@ export interface UserData {
   bucketList?: BucketItem[];
   memos?: Memo[];
   favorites?: string[];
+  shareToken?: string | null;
 }
 
 interface TimeLeft {
@@ -116,6 +117,7 @@ const sanitizeUserData = (data: any): UserData => {
     favorites: Array.isArray(data.favorites)
       ? data.favorites.filter((t: any) => typeof t === 'string' && t.length > 0).slice(0, 100).map((t: string) => t.slice(0, 50))
       : [],
+    shareToken: typeof data.shareToken === 'string' ? data.shareToken : (typeof data.share_token === 'string' ? data.share_token : null),
   };
 };
 
@@ -387,6 +389,66 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
+  const [showAiIntegration, setShowAiIntegration] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(initialData?.shareToken ?? null);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
+
+  const handleGenerateToken = async () => {
+    if (!initialData?.id) return;
+    const pw = window.prompt('確認のため、パスワードを入力してください：');
+    if (!pw) return;
+    setTokenLoading(true);
+    try {
+      const res = await fetch(`/api/user/${initialData.id}/share-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'トークン発行に失敗しました');
+      }
+      const data = await res.json();
+      setShareToken(data.shareToken);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
+  const handleRevokeToken = async () => {
+    if (!initialData?.id) return;
+    if (!window.confirm('トークンを失効させますか？連携中のAIからのアクセスが無効になります。')) return;
+    const pw = window.prompt('確認のため、パスワードを入力してください：');
+    if (!pw) return;
+    setTokenLoading(true);
+    try {
+      const res = await fetch(`/api/user/${initialData.id}/share-token`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '失効に失敗しました');
+      }
+      setShareToken(null);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (!shareToken) return;
+    await navigator.clipboard.writeText(shareToken);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
+  };
+
   const isNew = !initialData;
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -432,7 +494,7 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    onSave({ id: initialData?.id, username: initialData?.username, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), gender: gender || null, quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals, avatar }, isNew ? { username: username.trim(), password } : undefined);
+    onSave({ id: initialData?.id, username: initialData?.username, shareToken: shareToken ?? initialData?.shareToken ?? null, name: name || 'Anonymous', birthDate, expectedLifespan: parseInt(expectedLifespan, 10), gender: gender || null, quote: quote || 'Memento Mori', notes, bgColor, textColor, decadeGoals, avatar }, isNew ? { username: username.trim(), password } : undefined);
   };
 
   const handleUpdateCreds = (e: React.FormEvent) => {
@@ -690,7 +752,62 @@ function SetupForm({ initialData, onSave, onLogout, onDeleteAccount, onUpdateCre
         </form>
 
         {!isNew && (
-          <div className="mt-12 pt-8 border-t border-zinc-900/50 space-y-6">
+          <div className="mt-8 pt-8 border-t border-zinc-900/50 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-2"><Bot size={14} />AI連携</h3>
+              <button onClick={() => setShowAiIntegration(!showAiIntegration)} type="button" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                {showAiIntegration ? '隠す' : '表示する'}
+              </button>
+            </div>
+            {showAiIntegration && (
+              <div className="p-4 border border-zinc-800 rounded-lg bg-[#080808] space-y-4">
+                <p className="text-xs text-zinc-500">シェアトークンを発行すると、ChatGPT・Gemini・ClaudeなどのAIがあなたのプロフィールを読み書きできるようになります。</p>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">トークン</p>
+                  {shareToken ? (
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-zinc-900 text-zinc-300 px-3 py-2 rounded-md font-mono truncate">{shareToken.slice(0, 16)}…</code>
+                      <button type="button" onClick={handleCopyToken} className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors" title="コピー">
+                        {tokenCopied ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-600 italic">未発行</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleGenerateToken} disabled={tokenLoading} className="flex-1 bg-zinc-800 text-zinc-300 text-xs font-medium rounded-md px-3 py-2 hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                    {shareToken ? '再発行' : 'トークンを発行'}
+                  </button>
+                  {shareToken && (
+                    <button type="button" onClick={handleRevokeToken} disabled={tokenLoading} className="flex-1 bg-red-950/30 text-red-500 text-xs font-medium rounded-md px-3 py-2 border border-red-900/30 hover:bg-red-950/60 transition-colors disabled:opacity-50">
+                      失効させる
+                    </button>
+                  )}
+                </div>
+                {shareToken && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Claude Desktop 設定</p>
+                    <pre className="text-xs bg-zinc-900 text-zinc-400 px-3 py-2 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">{`{
+  "mcpServers": {
+    "memento-mori": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.ts"],
+      "env": {
+        "MEMENTO_MORI_TOKEN": "${shareToken}"
+      }
+    }
+  }
+}`}</pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isNew && (
+          <div className="mt-8 pt-8 border-t border-zinc-900/50 space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">アカウント・セキュリティ設定</h3>
               <button onClick={() => setShowSecurity(!showSecurity)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">

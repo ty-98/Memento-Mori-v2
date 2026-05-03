@@ -36,7 +36,11 @@ if (!USE_KV) {
     "ALTER TABLE users ADD COLUMN text_color TEXT",
     "ALTER TABLE users ADD COLUMN decade_goals TEXT",
     "ALTER TABLE users ADD COLUMN avatar TEXT",
-    "ALTER TABLE users ADD COLUMN bucket_list TEXT"
+    "ALTER TABLE users ADD COLUMN bucket_list TEXT",
+    "ALTER TABLE users ADD COLUMN gender TEXT",
+    "ALTER TABLE users ADD COLUMN share_token TEXT UNIQUE",
+    "ALTER TABLE users ADD COLUMN memos TEXT DEFAULT '[]'",
+    "ALTER TABLE users ADD COLUMN favorites TEXT DEFAULT '[]'"
   ];
   for (const query of migrations) {
     try { db.exec(query); } catch (e) {}
@@ -100,6 +104,53 @@ const checkGroqRateLimit = (key: string): boolean => {
   return false;
 };
 
+// Rate limiter for share token API: 60 req / hour per token
+const shareAttempts = new Map<string, { count: number; resetAt: number }>();
+const checkShareRateLimit = (key: string): boolean => {
+  const now = Date.now();
+  const record = shareAttempts.get(key);
+  if (!record || record.resetAt < now) {
+    shareAttempts.set(key, { count: 1, resetAt: now + 60 * 60 * 1000 });
+    return false;
+  }
+  if (record.count >= 60) return true;
+  record.count++;
+  return false;
+};
+
+const getUserByShareToken = (token: string) => {
+  return db.prepare("SELECT * FROM users WHERE share_token = ?").get(token) as any;
+};
+
+const buildPublicProfile = (user: any) => {
+  const birth = new Date(user.birth_date);
+  const expectedEnd = new Date(birth.getTime() + user.expected_lifespan * 365.25 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const totalMs = expectedEnd.getTime() - birth.getTime();
+  const elapsedMs = now.getTime() - birth.getTime();
+  const remainingMs = expectedEnd.getTime() - now.getTime();
+  const remainingDays = Math.max(0, Math.floor(remainingMs / (1000 * 60 * 60 * 24)));
+  return {
+    name: user.name,
+    birthDate: user.birth_date,
+    expectedLifespan: user.expected_lifespan,
+    gender: user.gender || null,
+    quote: user.quote,
+    notes: user.notes || "",
+    decadeGoals: user.decade_goals ? JSON.parse(user.decade_goals) : {},
+    bucketList: user.bucket_list ? JSON.parse(user.bucket_list) : [],
+    favorites: user.favorites ? JSON.parse(user.favorites) : [],
+    memos: (user.memos ? JSON.parse(user.memos) : []).slice(-10),
+    computed: {
+      elapsedPercent: parseFloat(Math.min(100, (elapsedMs / totalMs) * 100).toFixed(1)),
+      remainingPercent: parseFloat(Math.max(0, (remainingMs / totalMs) * 100).toFixed(1)),
+      remainingYears: parseFloat(Math.max(0, remainingMs / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1)),
+      remainingDays,
+      expectedEndDate: expectedEnd.toISOString().split('T')[0],
+    },
+  };
+};
+
 const app = express();
 app.use(express.json());
 
@@ -149,13 +200,13 @@ app.post("/api/auth/register", async (req, res) => {
       await kv.set(`user:profile:${id}`, newUserData);
     } else {
       const stmt = db.prepare(
-        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar, bucket_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO users (id, username, password_hash, name, birth_date, expected_lifespan, quote, notes, bg_color, text_color, decade_goals, avatar, bucket_list, gender, memos, favorites) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       stmt.run(
-        id, trimmedUsername, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar, JSON.stringify(newUserData.bucketList)
+        id, trimmedUsername, password_hash, newUserData.name, newUserData.birthDate, newUserData.expectedLifespan, newUserData.quote, newUserData.notes, newUserData.bgColor, newUserData.textColor, JSON.stringify(newUserData.decadeGoals), newUserData.avatar, JSON.stringify(newUserData.bucketList), newUserData.gender, '[]', '[]'
       );
     }
-    res.json(newUserData);
+    res.json({ ...newUserData, shareToken: null });
   } catch (err: any) {
     if (err.code === "SQLITE_CONSTRAINT_UNIQUE") {
       return res.status(409).json({ error: "このユーザーIDは既に使用されています。ログインをお試しください。" });
@@ -210,6 +261,9 @@ app.post("/api/auth/login", async (req, res) => {
         avatar: user.avatar,
         bucketList: user.bucket_list ? JSON.parse(user.bucket_list) : [],
         gender: user.gender || null,
+        memos: user.memos ? JSON.parse(user.memos) : [],
+        favorites: user.favorites ? JSON.parse(user.favorites) : [],
+        shareToken: user.share_token || null,
       });
     }
   } catch (err) {
@@ -220,7 +274,7 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.post("/api/user/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList } = req.body;
+  const { name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites } = req.body;
 
   try {
     if (USE_KV) {
@@ -228,14 +282,14 @@ app.post("/api/user/:id", async (req, res) => {
       if (!existingProfile) {
         return res.status(404).json({ error: "User not found" });
       }
-      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList };
+      const updatedData = { ...existingProfile, name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals, avatar, bucketList, gender, memos, favorites };
       await kv.set(`user:profile:${id}`, updatedData);
       return res.json({ success: true });
     } else {
       const stmt = db.prepare(
-        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ?, bucket_list = ? WHERE id = ?"
+        "UPDATE users SET name = ?, birth_date = ?, expected_lifespan = ?, quote = ?, notes = ?, bg_color = ?, text_color = ?, decade_goals = ?, avatar = ?, bucket_list = ?, gender = ?, memos = ?, favorites = ? WHERE id = ?"
       );
-      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, bucketList ? JSON.stringify(bucketList) : null, id);
+      const info = stmt.run(name, birthDate, expectedLifespan, quote, notes, bgColor, textColor, decadeGoals ? JSON.stringify(decadeGoals) : null, avatar || null, bucketList ? JSON.stringify(bucketList) : null, gender || null, memos ? JSON.stringify(memos) : '[]', favorites ? JSON.stringify(favorites) : '[]', id);
       if (info.changes === 0) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -365,6 +419,289 @@ app.delete("/api/user/:id", async (req, res) => {
       }
 
       db.prepare("DELETE FROM users WHERE id = ?").run(id);
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Share token: generate
+app.post("/api/user/:id/share-token", async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: "パスワードが必要です" });
+
+  try {
+    if (USE_KV) {
+      const profile: any = await kv.get(`user:profile:${id}`);
+      if (!profile) return res.status(404).json({ error: "User not found" });
+      const creds: any = await kv.get(`user:creds:${profile.username}`);
+      if (!creds || !verifyPassword(password, creds.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+      const token = crypto.randomBytes(32).toString('hex');
+      await kv.set(`user:sharetoken:${token}`, { id });
+      await kv.set(`user:profile:${id}`, { ...profile, shareToken: token });
+      return res.json({ shareToken: token });
+    } else {
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      if (!user || !verifyPassword(password, user.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+      const token = crypto.randomBytes(32).toString('hex');
+      db.prepare("UPDATE users SET share_token = ? WHERE id = ?").run(token, id);
+      return res.json({ shareToken: token });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Share token: revoke
+app.delete("/api/user/:id/share-token", async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: "パスワードが必要です" });
+
+  try {
+    if (USE_KV) {
+      const profile: any = await kv.get(`user:profile:${id}`);
+      if (!profile) return res.status(404).json({ error: "User not found" });
+      const creds: any = await kv.get(`user:creds:${profile.username}`);
+      if (!creds || !verifyPassword(password, creds.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+      if (profile.shareToken) await kv.del(`user:sharetoken:${profile.shareToken}`);
+      await kv.set(`user:profile:${id}`, { ...profile, shareToken: null });
+      return res.json({ success: true });
+    } else {
+      const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+      if (!user || !verifyPassword(password, user.password_hash)) {
+        return res.status(401).json({ error: "パスワードが正しくありません" });
+      }
+      db.prepare("UPDATE users SET share_token = NULL WHERE id = ?").run(id);
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: get profile
+app.get("/api/share/:token", async (req, res) => {
+  const { token } = req.params;
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      return res.json(profile);
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      return res.json(buildPublicProfile(user));
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: add bucket item
+app.post("/api/share/:token/bucket", async (req, res) => {
+  const { token } = req.params;
+  const { text } = req.body || {};
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    return res.status(400).json({ error: "text is required" });
+  }
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const item = { id: crypto.randomUUID(), text: text.trim(), completed: false, createdAt: new Date().toISOString() };
+      const bucketList = [...(profile.bucketList || []), item];
+      await kv.set(`user:profile:${ref.id}`, { ...profile, bucketList });
+      return res.json(item);
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      const bucketList = user.bucket_list ? JSON.parse(user.bucket_list) : [];
+      const item = { id: crypto.randomUUID(), text: text.trim(), completed: false, createdAt: new Date().toISOString() };
+      bucketList.push(item);
+      db.prepare("UPDATE users SET bucket_list = ? WHERE share_token = ?").run(JSON.stringify(bucketList), token);
+      return res.json(item);
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: update bucket item
+app.patch("/api/share/:token/bucket/:itemId", async (req, res) => {
+  const { token, itemId } = req.params;
+  const { text, completed } = req.body || {};
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const bucketList = (profile.bucketList || []).map((item: any) => {
+        if (item.id !== itemId) return item;
+        return { ...item, ...(text !== undefined ? { text } : {}), ...(completed !== undefined ? { completed } : {}) };
+      });
+      await kv.set(`user:profile:${ref.id}`, { ...profile, bucketList });
+      return res.json({ success: true });
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      const bucketList = user.bucket_list ? JSON.parse(user.bucket_list) : [];
+      const updated = bucketList.map((item: any) => {
+        if (item.id !== itemId) return item;
+        return { ...item, ...(text !== undefined ? { text } : {}), ...(completed !== undefined ? { completed } : {}) };
+      });
+      db.prepare("UPDATE users SET bucket_list = ? WHERE share_token = ?").run(JSON.stringify(updated), token);
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: delete bucket item
+app.delete("/api/share/:token/bucket/:itemId", async (req, res) => {
+  const { token, itemId } = req.params;
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const bucketList = (profile.bucketList || []).filter((item: any) => item.id !== itemId);
+      await kv.set(`user:profile:${ref.id}`, { ...profile, bucketList });
+      return res.json({ success: true });
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      const bucketList = (user.bucket_list ? JSON.parse(user.bucket_list) : []).filter((item: any) => item.id !== itemId);
+      db.prepare("UPDATE users SET bucket_list = ? WHERE share_token = ?").run(JSON.stringify(bucketList), token);
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: add memo
+app.post("/api/share/:token/memo", async (req, res) => {
+  const { token } = req.params;
+  const { content } = req.body || {};
+  if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    return res.status(400).json({ error: "content is required" });
+  }
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const memo = { id: crypto.randomUUID(), content: content.trim(), createdAt: new Date().toISOString() };
+      const memos = [...(profile.memos || []), memo].slice(-50);
+      await kv.set(`user:profile:${ref.id}`, { ...profile, memos });
+      return res.json(memo);
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      const memos = user.memos ? JSON.parse(user.memos) : [];
+      const memo = { id: crypto.randomUUID(), content: content.trim(), createdAt: new Date().toISOString() };
+      memos.push(memo);
+      const trimmed = memos.slice(-50);
+      db.prepare("UPDATE users SET memos = ? WHERE share_token = ?").run(JSON.stringify(trimmed), token);
+      return res.json(memo);
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: update notes
+app.put("/api/share/:token/notes", async (req, res) => {
+  const { token } = req.params;
+  const { notes } = req.body || {};
+  if (typeof notes !== 'string') return res.status(400).json({ error: "notes must be a string" });
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      await kv.set(`user:profile:${ref.id}`, { ...profile, notes });
+      return res.json({ success: true });
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      db.prepare("UPDATE users SET notes = ? WHERE share_token = ?").run(notes, token);
+      return res.json({ success: true });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public share API: update decade goal
+app.put("/api/share/:token/goals", async (req, res) => {
+  const { token } = req.params;
+  const { decadeKey, goal } = req.body || {};
+  if (!decadeKey || typeof goal !== 'string') {
+    return res.status(400).json({ error: "decadeKey and goal are required" });
+  }
+  if (checkShareRateLimit(`share:${token}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます" });
+  }
+  try {
+    if (USE_KV) {
+      const ref: any = await kv.get(`user:sharetoken:${token}`);
+      if (!ref) return res.status(404).json({ error: "Token not found" });
+      const profile: any = await kv.get(`user:profile:${ref.id}`);
+      if (!profile) return res.status(404).json({ error: "Profile not found" });
+      const decadeGoals = { ...(profile.decadeGoals || {}), [decadeKey]: goal };
+      await kv.set(`user:profile:${ref.id}`, { ...profile, decadeGoals });
+      return res.json({ success: true });
+    } else {
+      const user = getUserByShareToken(token);
+      if (!user) return res.status(404).json({ error: "Token not found" });
+      const decadeGoals = { ...(user.decade_goals ? JSON.parse(user.decade_goals) : {}), [decadeKey]: goal };
+      db.prepare("UPDATE users SET decade_goals = ? WHERE share_token = ?").run(JSON.stringify(decadeGoals), token);
       return res.json({ success: true });
     }
   } catch (err) {
