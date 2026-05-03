@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen } from 'lucide-react';
+import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen, Bot, Sparkles } from 'lucide-react';
 import { ReflectModal } from './components/ReflectModal';
 import { BucketListPanel } from './components/BucketListPanel';
 import { AdvisorPanel } from './components/AdvisorPanel';
@@ -765,6 +765,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [isSharing, setIsSharing] = useState(false);
   const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isMemoOpen, setIsMemoOpen] = useState(false);
+  const [aiCopied, setAiCopied] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
 
   const handleAddMemo = (text: string) => {
@@ -774,6 +775,67 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
   const handleDeleteMemo = (id: string) => {
     onUpdateUserData({ memos: (userData.memos ?? []).filter(m => m.id !== id) });
+  };
+
+  const buildAIProfileText = () => {
+    const lines: string[] = [
+      '# Memento Mori — 私の人生プロフィール',
+      '',
+      '## 基本情報',
+      `- 名前: ${userData.name}`,
+      `- 生年月日: ${userData.birthDate}`,
+      `- 想定寿命: ${userData.expectedLifespan}歳`,
+    ];
+    if (userData.gender) lines.push(`- 性別: ${userData.gender === 'male' ? '男性' : '女性'}`);
+
+    lines.push('', '## 残り時間');
+    lines.push(`- 人生の経過: ${progress.elapsed.toFixed(1)}%`);
+    lines.push(`- 残り: ${progress.remaining.toFixed(1)}%`);
+    lines.push(`- 残り時間: ${timeLeft.years}年 ${timeLeft.months}ヶ月 ${timeLeft.days}日`);
+    lines.push(`- 想定期限日: ${deathDate}`);
+
+    if (userData.quote) {
+      lines.push('', '## 座右の銘・目標', userData.quote);
+    }
+    if (userData.notes?.trim()) {
+      lines.push('', '## 人生で大切なこと', userData.notes.trim());
+    }
+
+    const nonEmptyGoals = Object.entries(userData.decadeGoals || {})
+      .filter(([, v]) => v?.trim())
+      .sort(([a], [b]) => Number(a) - Number(b));
+    if (nonEmptyGoals.length > 0) {
+      lines.push('', '## 年代別目標');
+      nonEmptyGoals.forEach(([decade, goal]) => lines.push(`- ${decade}代: ${goal}`));
+    }
+
+    const pending = (userData.bucketList || []).filter(i => !i.completed);
+    if (pending.length > 0) {
+      lines.push('', '## バケットリスト（未達成）');
+      pending.slice(0, 20).forEach(item => lines.push(`- ${item.text}`));
+    }
+
+    if (userData.favorites?.length) {
+      lines.push('', '## 好きなもの・大切なもの', userData.favorites.join('、'));
+    }
+
+    lines.push(
+      '',
+      '---',
+      'このデータは人生カウントダウンアプリ「Memento Mori」からエクスポートしました。',
+      'このプロフィールをもとに、人生の残り時間を有意義に過ごすためのアドバイスをお願いします。'
+    );
+    return lines.join('\n');
+  };
+
+  const handleAIShare = async () => {
+    try {
+      await navigator.clipboard.writeText(buildAIProfileText());
+      setAiCopied(true);
+      setTimeout(() => setAiCopied(false), 2500);
+    } catch {
+      alert('クリップボードへのコピーに失敗しました。');
+    }
   };
 
   const handleShare = async () => {
@@ -904,6 +966,16 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
         {!isSharing && (
           <div className="flex gap-0.5 shrink-0">
+            <button
+              onClick={handleAIShare}
+              className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5 relative"
+              title="AIと共有（プロフィールをコピー）"
+            >
+              {aiCopied ? <Check size={17} /> : <Bot size={17} />}
+              {aiCopied && (
+                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] tracking-wide whitespace-nowrap opacity-70">Copied!</span>
+              )}
+            </button>
             <button onClick={handleShare} disabled={isSharing} className="p-2 opacity-50 hover:opacity-100 transition-opacity rounded-full hover:bg-white/5" title="シェア">
               <Share2 size={17} />
             </button>
@@ -1008,6 +1080,8 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
               onChange={(favs) => onUpdateUserData({ favorites: favs })}
               textColor={userData.textColor}
             />
+
+            <LifeTipsSection userData={userData} />
           </motion.div>
         )}
 
@@ -1098,6 +1172,82 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
       {/* モーダル */}
       <ReflectModal isOpen={isReflectModalOpen} onClose={() => setIsReflectModalOpen(false)} userData={userData} />
+    </div>
+  );
+}
+
+function LifeTipsSection({ userData }: { userData: UserData }) {
+  const [tips, setTips] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const generate = async () => {
+    setIsLoading(true);
+    setError('');
+    const age = new Date().getFullYear() - new Date(userData.birthDate).getFullYear();
+    const genderText = userData.gender === 'male' ? '男性' : userData.gender === 'female' ? '女性' : '';
+    const prompt = `健康・長寿の専門家として、${age}歳${genderText}の人に向けた、科学的根拠のある寿命延長・健康増進のアドバイスを5つ、日本語で答えてください。各項目は「•」で始め、具体的で実行可能な内容にしてください。説明や前置きは一切不要です。`;
+
+    try {
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '生成に失敗しました');
+      }
+      const data = await res.json();
+      const parsed = (data.text as string)
+        .split('\n')
+        .map((l: string) => l.replace(/^[•\-\*\d\.\)]\s*/, '').trim())
+        .filter((l: string) => l.length > 8)
+        .slice(0, 5);
+      setTips(parsed);
+    } catch (e: any) {
+      setError(e.message || '生成に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-[10px] tracking-[0.3em] uppercase font-medium opacity-50 flex items-center gap-2">
+          <Sparkles size={10} />
+          Longevity Tips
+        </h3>
+        <button
+          onClick={generate}
+          disabled={isLoading}
+          className="text-xs opacity-40 hover:opacity-80 disabled:opacity-20 transition-opacity"
+        >
+          {isLoading ? '生成中...' : tips.length > 0 ? '再生成' : 'AI で生成'}
+        </button>
+      </div>
+      {error && <p className="text-xs opacity-60" style={{ color: '#f87171' }}>{error}</p>}
+      {tips.length === 0 && !isLoading && !error && (
+        <p className="text-xs opacity-25 italic">ボタンを押してパーソナライズされた長寿Tipsを生成します</p>
+      )}
+      {isLoading && (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-4 rounded opacity-10 animate-pulse" style={{ backgroundColor: 'currentColor', width: `${70 + i * 5}%` }} />
+          ))}
+        </div>
+      )}
+      {tips.length > 0 && !isLoading && (
+        <ul className="space-y-3">
+          {tips.map((tip, i) => (
+            <li key={i} className="flex gap-3 text-sm font-light opacity-80">
+              <span className="font-mono text-xs opacity-30 shrink-0 pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+              <span className="leading-relaxed">{tip}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
