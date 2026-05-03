@@ -86,6 +86,20 @@ const checkRateLimit = (key: string): boolean => {
 
 const isValidUsername = (u: string): boolean => /^[a-zA-Z0-9_-]{3,50}$/.test(u);
 
+// Separate rate limiter for AI endpoint: 30 req / hour per IP
+const groqAttempts = new Map<string, { count: number; resetAt: number }>();
+const checkGroqRateLimit = (key: string): boolean => {
+  const now = Date.now();
+  const record = groqAttempts.get(key);
+  if (!record || record.resetAt < now) {
+    groqAttempts.set(key, { count: 1, resetAt: now + 60 * 60 * 1000 });
+    return false;
+  }
+  if (record.count >= 30) return true;
+  record.count++;
+  return false;
+};
+
 const app = express();
 app.use(express.json());
 
@@ -368,6 +382,14 @@ app.post("/api/gemini", async (req, res) => {
   const { prompt } = req.body;
   if (!prompt || typeof prompt !== "string") {
     return res.status(400).json({ error: "prompt is required" });
+  }
+  if (prompt.length > 3000) {
+    return res.status(400).json({ error: "プロンプトが長すぎます" });
+  }
+
+  const ip = ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() || 'unknown';
+  if (checkGroqRateLimit(`groq:${ip}`)) {
+    return res.status(429).json({ error: "リクエストが多すぎます。しばらく待ってからお試しください。" });
   }
 
   try {
