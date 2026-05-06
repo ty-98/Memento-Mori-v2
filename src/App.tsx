@@ -1162,7 +1162,19 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
                 </div>
               </div>
 
-              <div className="mt-8 w-full max-w-2xl">
+              {userData.purpose && (
+                <div className="mt-8 w-full max-w-2xl">
+                  <p className="text-[9px] tracking-[0.25em] uppercase opacity-30 mb-1.5 text-center">Purpose</p>
+                  <p
+                    className="text-xs md:text-sm text-center leading-relaxed opacity-50 italic cursor-pointer hover:opacity-70 transition-opacity"
+                    onClick={() => setActiveTab('purpose')}
+                  >
+                    {userData.purpose}
+                  </p>
+                </div>
+              )}
+
+              <div className={userData.purpose ? 'mt-6 w-full max-w-2xl' : 'mt-8 w-full max-w-2xl'}>
                 <StoicQuotes textColor={userData.textColor} />
               </div>
               <div className="w-full max-w-3xl mt-4">
@@ -1239,7 +1251,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
             className="max-w-3xl mx-auto px-4 py-8"
           >
             <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Life Advisor</h3>
-            <AdvisorPanel userData={userData} onUpdateUserData={onUpdateUserData} />
+            <AdvisorPanel userData={userData} onUpdateUserData={onUpdateUserData} onNavigateToPurpose={() => setActiveTab('purpose')} />
           </motion.div>
         )}
 
@@ -1252,7 +1264,7 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
             className="max-w-3xl mx-auto px-4 py-8"
           >
             <h3 className="text-[10px] tracking-[0.3em] uppercase mb-5 font-medium opacity-50">Life Purpose</h3>
-            <PurposePanel userData={userData} onUpdateUserData={onUpdateUserData} />
+            <PurposePanel userData={userData} onUpdateUserData={onUpdateUserData} onNavigateToAdvisor={() => setActiveTab('advisor')} />
           </motion.div>
         )}
 

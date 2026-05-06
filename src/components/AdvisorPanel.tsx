@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Compass, Sparkles, Loader2, ListChecks, Heart, Home, Quote } from 'lucide-react';
+import { Compass, Sparkles, Loader2, ListChecks, Heart, Home, Quote, Flame, ChevronDown, ChevronUp } from 'lucide-react';
 import { BucketItem, UserData } from '../App';
 
+// ─── Adviser (general) types ───────────────────────────────────────────────
 type Step = 'topic' | 'questioning' | 'answering' | 'analyzing' | 'proposals';
 
 interface Proposal {
@@ -14,30 +15,35 @@ interface Proposal {
   skipped: boolean;
 }
 
+// ─── Purpose dialogue types ─────────────────────────────────────────────────
+type PurposeStep = 'collapsed' | 'intro' | 'answering' | 'synthesizing' | 'confirming';
+
+const PURPOSE_QUESTIONS = [
+  '時間を忘れて没頭できることは何ですか？\nそれはなぜだと思いますか？',
+  '人生の終わりに、どんな人でありたいですか？\n誰かにどんな影響を残したいですか？',
+  'もし失敗が絶対にない世界なら、何に挑戦したいですか？\nまた、人生で絶対に後悔したくないことは何ですか？',
+];
+
+// ─── Props ──────────────────────────────────────────────────────────────────
 interface AdvisorPanelProps {
   userData: UserData;
   onUpdateUserData: (data: Partial<UserData>) => void;
+  onNavigateToPurpose?: () => void;
 }
 
+// ─── Session management ─────────────────────────────────────────────────────
 const SESSION_LIMIT = 5;
 const STORAGE_KEY = 'advisor_sessions';
 
-function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
+function getTodayKey() { return new Date().toISOString().slice(0, 10); }
 function getDailySessions(): number {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return 0;
     const data = JSON.parse(raw);
-    if (data.date !== getTodayKey()) return 0;
-    return data.count ?? 0;
-  } catch {
-    return 0;
-  }
+    return data.date !== getTodayKey() ? 0 : (data.count ?? 0);
+  } catch { return 0; }
 }
-
 function incrementSessions(): number {
   const count = getDailySessions() + 1;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: getTodayKey(), count }));
@@ -53,7 +59,8 @@ function buildContext(userData: UserData): string {
     ? Object.entries(userData.decadeGoals).map(([d, g]) => `${d}代: ${g}`).join('、')
     : 'なし';
   const bucket = userData.bucketList?.filter(i => !i.completed).slice(0, 5).map(i => i.text).join('、') || 'なし';
-  return `名前: ${userData.name} / 年齢: ${age}歳 / 残り推定: ${remaining}年 / 座右の銘: "${userData.quote}" / 10年目標: ${goals} / バケツリスト: ${bucket} / 大切にしていること: ${userData.notes || 'なし'}`;
+  const purposePart = userData.purpose ? `パーパス: 「${userData.purpose}」 / ` : '';
+  return `${purposePart}名前: ${userData.name} / 年齢: ${age}歳 / 残り推定: ${remaining}年 / 座右の銘: "${userData.quote}" / 10年目標: ${goals} / バケツリスト: ${bucket} / 大切にしていること: ${userData.notes || 'なし'}`;
 }
 
 const THEMES = [
@@ -64,7 +71,253 @@ const THEMES = [
   { label: '自分の在り方', emoji: '🧭' },
 ];
 
-export function AdvisorPanel({ userData, onUpdateUserData }: AdvisorPanelProps) {
+// ─── Purpose dialogue sub-component ─────────────────────────────────────────
+function PurposeDialogue({
+  userData,
+  onUpdateUserData,
+  onNavigateToPurpose,
+  initiallyExpanded,
+}: {
+  userData: UserData;
+  onUpdateUserData: (data: Partial<UserData>) => void;
+  onNavigateToPurpose?: () => void;
+  initiallyExpanded: boolean;
+}) {
+  const hasPurpose = !!userData.purpose;
+  const [purposeStep, setPurposeStep] = useState<PurposeStep>(
+    initiallyExpanded && !hasPurpose ? 'intro' : 'collapsed'
+  );
+  const [currentRound, setCurrentRound] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [currentAnswer, setCurrentAnswer] = useState('');
+  const [draftPurpose, setDraftPurpose] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const callAI = async (prompt: string): Promise<string> => {
+    const res = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'AIの応答に失敗しました');
+    }
+    const data = await res.json();
+    return data.text ?? '';
+  };
+
+  const handleStartDialogue = () => {
+    setCurrentRound(0);
+    setAnswers([]);
+    setCurrentAnswer('');
+    setError('');
+    setPurposeStep('answering');
+  };
+
+  const handleAnswerSubmit = async () => {
+    const a = currentAnswer.trim();
+    if (!a) return;
+    const newAnswers = [...answers, a];
+    setAnswers(newAnswers);
+    setCurrentAnswer('');
+
+    if (currentRound < PURPOSE_QUESTIONS.length - 1) {
+      setCurrentRound(r => r + 1);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setPurposeStep('synthesizing');
+    try {
+      const now = new Date();
+      const birth = new Date(userData.birthDate);
+      const age = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+      const remaining = userData.expectedLifespan - age;
+      const qaPairs = PURPOSE_QUESTIONS.map((q, i) => `Q: ${q}\nA: ${newAnswers[i]}`).join('\n\n');
+      const prompt = `あなたはライフコーチです。以下のユーザーの3つの回答をもとに、その人の「パーパス（なんのために生きるか）」を1〜2文で言語化してください。
+
+ユーザー情報: ${age}歳、残り推定${remaining}年
+
+${qaPairs}
+
+【出力ルール】
+- 「〜のために、〜することで、〜する」のような自然な形式で
+- 大げさすぎず、その人らしい言葉で
+- 日本語で2文以内、パーパス文のみを返す（前置き・説明不要）`;
+      const result = await callAI(prompt);
+      setDraftPurpose(result.trim());
+      setPurposeStep('confirming');
+    } catch (e: any) {
+      setError(e.message);
+      setPurposeStep('answering');
+      setCurrentRound(PURPOSE_QUESTIONS.length - 1);
+      setAnswers(newAnswers.slice(0, -1));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    const p = draftPurpose.trim();
+    if (!p) return;
+    onUpdateUserData({ purpose: p } as any);
+    setPurposeStep('collapsed');
+    onNavigateToPurpose?.();
+  };
+
+  // ── Collapsed banner ──
+  if (purposeStep === 'collapsed') {
+    return (
+      <div className="border border-current/15 rounded-xl overflow-hidden mb-6">
+        <button
+          onClick={() => setPurposeStep('intro')}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Flame size={13} className="opacity-50" />
+            <span className="text-xs opacity-60 font-medium">
+              {hasPurpose
+                ? `${userData.purpose!.slice(0, 42)}${userData.purpose!.length > 42 ? '…' : ''}`
+                : 'パーパスを設定する'}
+            </span>
+          </div>
+          <ChevronDown size={13} className="opacity-30" />
+        </button>
+      </div>
+    );
+  }
+
+  // ── Expanded ──
+  return (
+    <div className="border border-current/15 rounded-xl p-5 space-y-4 mb-6">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] tracking-[0.3em] uppercase opacity-40 flex items-center gap-1.5">
+          <Flame size={10} />Purpose
+        </p>
+        <button onClick={() => setPurposeStep('collapsed')} className="opacity-30 hover:opacity-70 transition-opacity">
+          <ChevronUp size={13} />
+        </button>
+      </div>
+
+      {/* intro */}
+      {purposeStep === 'intro' && (
+        <div className="space-y-4">
+          {hasPurpose ? (
+            <>
+              <p className="text-sm leading-relaxed opacity-80">{userData.purpose}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleStartDialogue}
+                  className="flex-1 border border-current/20 text-xs rounded-lg py-2 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  対話して更新
+                </button>
+                <button
+                  onClick={() => { setPurposeStep('collapsed'); onNavigateToPurpose?.(); }}
+                  className="flex-1 border border-current/20 text-xs rounded-lg py-2 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  ダッシュボードへ →
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs opacity-50 leading-relaxed">
+                「なんのために生きるか」を言語化します。3つの問いに答えると、AIがパーパスをまとめます。
+              </p>
+              <button
+                onClick={handleStartDialogue}
+                className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-2.5 hover:bg-white transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles size={14} /> はじめる
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* answering */}
+      {purposeStep === 'answering' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] tracking-[0.2em] uppercase opacity-40">問い {currentRound + 1} / {PURPOSE_QUESTIONS.length}</span>
+            <div className="flex-1 bg-current/10 rounded-full h-0.5">
+              <div
+                className="bg-current/40 h-0.5 rounded-full transition-all duration-500"
+                style={{ width: `${(currentRound / PURPOSE_QUESTIONS.length) * 100}%` }}
+              />
+            </div>
+          </div>
+          <div className="border-l-2 border-current/30 pl-4">
+            <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap">{PURPOSE_QUESTIONS[currentRound]}</p>
+          </div>
+          <textarea
+            value={currentAnswer}
+            onChange={(e) => setCurrentAnswer(e.target.value)}
+            placeholder="思ったことを素直に..."
+            rows={4}
+            maxLength={1000}
+            className="w-full bg-black/20 border border-zinc-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600 resize-none leading-relaxed"
+            autoFocus
+          />
+          <div className="text-right text-xs opacity-30">{currentAnswer.length}/1000</div>
+          {error && <p className="text-red-400 text-xs bg-red-400/10 p-3 rounded-lg border border-red-400/20">{error}</p>}
+          <button
+            onClick={handleAnswerSubmit}
+            disabled={!currentAnswer.trim()}
+            className="w-full bg-zinc-100 text-zinc-950 font-medium rounded-lg px-4 py-2.5 hover:bg-white transition-colors disabled:opacity-30 text-sm"
+          >
+            {currentRound < PURPOSE_QUESTIONS.length - 1 ? '次の問いへ →' : 'パーパスを生成する'}
+          </button>
+        </div>
+      )}
+
+      {/* synthesizing */}
+      {purposeStep === 'synthesizing' && (
+        <div className="py-8 flex flex-col items-center text-center space-y-3">
+          <Loader2 size={22} className="animate-spin opacity-40" />
+          <p className="text-xs opacity-40 tracking-wide">パーパスを生成しています...</p>
+        </div>
+      )}
+
+      {/* confirming */}
+      {purposeStep === 'confirming' && (
+        <div className="space-y-4">
+          <p className="text-[10px] tracking-[0.2em] uppercase opacity-40">生成されたパーパス</p>
+          <textarea
+            value={draftPurpose}
+            onChange={(e) => setDraftPurpose(e.target.value)}
+            rows={3}
+            maxLength={500}
+            className="w-full bg-transparent border border-current/20 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none resize-none"
+          />
+          <p className="text-[11px] opacity-30">このまま、または編集して確定してください。</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirm}
+              disabled={!draftPurpose.trim()}
+              className="flex-1 bg-zinc-100 text-zinc-950 text-sm font-medium rounded-lg py-2.5 hover:bg-white transition-colors disabled:opacity-30"
+            >
+              <Flame size={13} className="inline mr-1.5" />確定する
+            </button>
+            <button
+              onClick={() => { setPurposeStep('answering'); setCurrentRound(0); setAnswers([]); }}
+              className="px-4 border border-current/20 text-xs rounded-lg opacity-50 hover:opacity-100"
+            >
+              やり直す
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main AdvisorPanel ───────────────────────────────────────────────────────
+export function AdvisorPanel({ userData, onUpdateUserData, onNavigateToPurpose }: AdvisorPanelProps) {
   const [step, setStep] = useState<Step>('topic');
   const [topic, setTopic] = useState('');
   const [question, setQuestion] = useState('');
@@ -95,7 +348,7 @@ export function AdvisorPanel({ userData, onUpdateUserData }: AdvisorPanelProps) 
     const t = topic.trim();
     if (!t) return;
     if (remaining <= 0) {
-      setError('本日のご利用上限（3回）に達しました。また明日お話ししましょう。');
+      setError('本日のご利用上限（5回）に達しました。また明日お話ししましょう。');
       return;
     }
     setLoading(true);
@@ -220,7 +473,19 @@ type の説明:
 
   return (
     <div className="space-y-5">
+      {/* Purpose section at top */}
+      <PurposeDialogue
+        userData={userData}
+        onUpdateUserData={onUpdateUserData}
+        onNavigateToPurpose={onNavigateToPurpose}
+        initiallyExpanded={!userData.purpose}
+      />
+
+      {/* Session counter + label */}
       <div className="flex items-center justify-between">
+        <p className="text-[10px] tracking-[0.2em] uppercase opacity-30 flex items-center gap-1.5">
+          <Compass size={10} />Life Advisor
+        </p>
         <p className="text-zinc-600 text-xs">本日残り {remaining}/{SESSION_LIMIT} セッション</p>
       </div>
 
@@ -326,7 +591,6 @@ type の説明:
                     transition={{ delay: i * 0.1 }}
                     className="border border-zinc-800 rounded-xl overflow-hidden"
                   >
-                    {/* 行先バッジ */}
                     <div className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900/60 border-b border-zinc-800">
                       <span className="text-zinc-400">{meta.icon}</span>
                       <span className="text-[10px] text-zinc-400 tracking-wider uppercase">{meta.label}</span>
