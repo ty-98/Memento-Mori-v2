@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Settings, LogOut, KeyRound, Copy, Check, Calendar, Share2, X, ListChecks, Compass, Home, Heart, NotebookPen, Bot, Sparkles, Flame } from 'lucide-react';
-import { ReflectModal } from './components/ReflectModal';
 import { BucketListPanel } from './components/BucketListPanel';
 import { AdvisorPanel } from './components/AdvisorPanel';
 import { StoicQuotes } from './components/StoicQuotes';
@@ -891,10 +890,8 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
   const [deathDate, setDeathDate] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'home' | 'life' | 'bucket' | 'advisor' | 'purpose'>('home');
   const [isSharing, setIsSharing] = useState(false);
-  const [isReflectModalOpen, setIsReflectModalOpen] = useState(false);
   const [isMemoOpen, setIsMemoOpen] = useState(false);
   const [aiCopied, setAiCopied] = useState(false);
-  const shareRef = useRef<HTMLDivElement>(null);
 
   const handleAddMemo = (text: string) => {
     const newMemo: Memo = { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() };
@@ -1075,7 +1072,6 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
 
   return (
     <div
-      ref={shareRef}
       className="h-[100dvh] flex flex-col font-sans selection:bg-zinc-800 transition-colors duration-500 overflow-hidden"
       style={{ backgroundColor: userData.bgColor || '#050505', color: userData.textColor || '#fafafa' }}
     >
@@ -1312,19 +1308,18 @@ function CountdownView({ userData, onEdit, onLogout, onUpdateUserData }: { userD
       )}
 
       {/* メモシート */}
-      {isMemoOpen && (
-        <MemoSheet
-          memos={userData.memos ?? []}
-          onAdd={handleAddMemo}
-          onDelete={handleDeleteMemo}
-          onClose={() => setIsMemoOpen(false)}
-          bgColor={userData.bgColor}
-          textColor={userData.textColor}
-        />
-      )}
-
-      {/* モーダル */}
-      <ReflectModal isOpen={isReflectModalOpen} onClose={() => setIsReflectModalOpen(false)} userData={userData} />
+      <AnimatePresence>
+        {isMemoOpen && (
+          <MemoSheet
+            memos={userData.memos ?? []}
+            onAdd={handleAddMemo}
+            onDelete={handleDeleteMemo}
+            onClose={() => setIsMemoOpen(false)}
+            bgColor={userData.bgColor}
+            textColor={userData.textColor}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

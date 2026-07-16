@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { X, Trash2, Send } from 'lucide-react';
 
 export interface Memo {
@@ -55,15 +55,14 @@ export function MemoSheet({ memos, onAdd, onDelete, onClose, bgColor = '#050505'
   };
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex flex-col justify-end"
-        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      >
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
         <motion.div
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
@@ -138,6 +137,5 @@ export function MemoSheet({ memos, onAdd, onDelete, onClose, bgColor = '#050505'
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
   );
 }

@@ -32,8 +32,8 @@ export function BucketListPanel({ items, onChange }: BucketListPanelProps) {
   };
 
   const sortedItems = [
-    ...items.filter((i) => !i.completed).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    ...items.filter((i) => i.completed).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    ...items.filter((i) => !i.completed).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    ...items.filter((i) => i.completed).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   ];
 
   return (
@@ -78,7 +78,7 @@ export function BucketListPanel({ items, onChange }: BucketListPanelProps) {
                 </span>
                 <button
                   onClick={() => handleDelete(item.id)}
-                  className="opacity-30 hover:opacity-100 hover:text-red-400 transition-all shrink-0"
+                  className="opacity-20 hover:opacity-100 hover:text-red-400 transition-all shrink-0 md:opacity-0 md:group-hover:opacity-30"
                 >
                   <Trash2 size={15} />
                 </button>

@@ -247,7 +247,7 @@ ${qaPairs}
             <div className="flex-1 bg-current/10 rounded-full h-0.5">
               <div
                 className="bg-current/40 h-0.5 rounded-full transition-all duration-500"
-                style={{ width: `${(currentRound / PURPOSE_QUESTIONS.length) * 100}%` }}
+                style={{ width: `${((currentRound + 1) / PURPOSE_QUESTIONS.length) * 100}%` }}
               />
             </div>
           </div>

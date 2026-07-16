@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 node_modules
+.vercel
+/AIO 対策システム/
